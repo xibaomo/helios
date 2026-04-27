@@ -1,4 +1,4 @@
-#include "array2d.h"
+#include "arr.h"
 
 int main() {
     return 0;
