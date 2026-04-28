@@ -5,7 +5,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
 endif()
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/basics)
+
 add_subdirectory(src)
 
 install(TARGETS helios
-        DESTINATION bin)
+    DESTINATION bin)
+install(TARGETS run_utest
+    DESTINATION bin)

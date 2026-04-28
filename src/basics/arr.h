@@ -68,6 +68,8 @@ class Array1D {
 
   T* getData() { return m_data.get(); }
 
+  size_t getSize() const { return m_size; }
+
   T& operator[](size_t i) { return m_data[i]; }
   const T& operator[](size_t i) const { return m_data[i]; }
 
@@ -111,7 +113,7 @@ class Array2D : public Array1D<T> {
   }
 
   // move assignment
-  Array2D& operator=(Array2D<T>&& other) noexcept{
+  Array2D& operator=(Array2D<T>&& other) noexcept {
     if (this != &other) {
       Array1D<T>::operator=(std::move(other));
       m_size1 = other.m_size1;
@@ -121,6 +123,11 @@ class Array2D : public Array1D<T> {
     }
     return *this;
   }
+
+  T* operator[](size_t i) { return this->m_data.get() + m_size2 * i; }
+
+  size_t getSize1() const { return m_size1; }
+  size_t getSize2() const { return m_size2; }
 };
 typedef std::complex<float> Complex;
 
