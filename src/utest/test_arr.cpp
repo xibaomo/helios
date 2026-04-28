@@ -33,7 +33,9 @@ bool test_arr2d() {
     }
   }
 
-  a.for_each([](Real a){ return a+1;});
+  Array2D<Real> b = a;
+
+  a.for_each([](Real a, Real b){ return a+b;}, b);
 
   for (size_t i = 0; i < a.getSize1(); i++) {
     for (size_t j = 0; j < a.getSize2(); j++) {
