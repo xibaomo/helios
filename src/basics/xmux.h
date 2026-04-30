@@ -1,6 +1,7 @@
 #pragma once
 #include "arr.h"
 #include "cuhandlemgr.h"
+#include "types.h"
 #define GRID_SIZE 512
 #define BLOCK_SIZE 512
 
