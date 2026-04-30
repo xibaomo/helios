@@ -57,14 +57,14 @@ struct Dim2D {
 };
 template <typename T>
 using OptionalDim =
-    std::conditional_t<std::is_base_of_v<Array2D<typename T::ValueType>, T>,
+    std::conditional_t<std::is_base_of_v<Array2D<typename T::dtype>, T>,
                        Dim2D, Empty>;
 
 template <typename Arr>
 class XMux : public OptionalDim<Arr> {
  public:
   enum class Device { __cpu__, __gpu__ };
-  using dtype = typename Arr::ValueType;
+  using dtype = typename Arr::dtype;
 
  private:
   std::unique_ptr<Arr> m_own_cpu;

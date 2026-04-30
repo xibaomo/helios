@@ -10,7 +10,7 @@ class Array1D {
   size_t m_size = 0;
 
  public:
-  using ValueType = T;
+  using dtype = T;
   Array1D(size_t s = 0) : m_data(nullptr), m_size(s) {
     resize(m_size);
     zero();
@@ -69,6 +69,7 @@ class Array1D {
   }
 
   T* getData() { return m_data.get(); }
+  const T* getData() const { return m_data.get();}
 
   size_t getSize() const { return m_size; }
 
