@@ -10,6 +10,7 @@ class Array1D {
   size_t m_size = 0;
 
  public:
+  using ValueType = T;
   Array1D(size_t s = 0) : m_data(nullptr), m_size(s) {
     resize(m_size);
     zero();
@@ -55,6 +56,7 @@ class Array1D {
   }
 
   void resize(size_t s) {
+    m_size = s;
     if (s > 0) {
       m_data = std::make_unique<T[]>(s);
     }
@@ -89,6 +91,12 @@ class Array2D : public Array1D<T> {
  public:
   Array2D(size_t s1 = 0, size_t s2 = 0)
       : Array1D<T>(s1 * s2), m_size1(s1), m_size2(s2) {}
+
+  void resize(size_t s1, size_t s2) {
+    m_size1 = s1;
+    m_size2 = s2;
+    Array1D<T>::resize(s1*s2);
+  }
 
   Array2D(const Array2D<T>& other)
       : Array1D<T>(other), m_size1(other.m_size1), m_size2(other.m_size2) {}
@@ -128,6 +136,7 @@ class Array2D : public Array1D<T> {
 
   size_t getSize1() const { return m_size1; }
   size_t getSize2() const { return m_size2; }
+
 };
 typedef std::complex<float> Complex;
 
