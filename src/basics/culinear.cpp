@@ -71,7 +71,24 @@ void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
 }
 
 void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
-                  XMux<ComplexVector>& x) {}
+                  XMux<ComplexVector>& x) {
+  XMux<ComplexMatrix> B(b.getSize(), 1);
+  Complex* pB = B.cpu().getData();
+  const Complex* pb = b.cpu().getData();
+  memcpy(pB,pb,sizeof(Complex)*b.getSize());
+  
+  XMux<ComplexMatrix> X(b.getSize(),1);
+  linsolve_mat_gpu(A,B,X);
+  
+  Complex* d_X = X.device_data();
+  if(!x.device_data()) {
+    Complex* d_x;
+    CUDA_CHECK(cudaMalloc(&d_x, sizeof(cuComplex)*b.getSize()));
+    x.setDeviceData(d_x);
+  }
+  CUDA_CHECK(cudaMemcpy(x.device_data(),d_X,sizeof(cuComplex)*b.getSize(),cudaMemcpyDeviceToDevice));
+  x.touchGPU();
+}
 
 void linsolve_mat_gpu(const XMux<ComplexMatrix>& A,
                       const XMux<ComplexMatrix>& B, XMux<ComplexMatrix>& X) {

@@ -12,6 +12,8 @@ static bool test_eig();
 static AddUnitTest t_eig("test_eig", test_eig);
 static bool test_linsolve();
 static AddUnitTest t_linsolve("test_linsolve", test_linsolve);
+static bool test_linsolve_vector();
+static AddUnitTest t_linsolvevec("test_linsolve_vec", test_linsolve_vector);
 
 static ComplexMatrix createMat(size_t N1, size_t N2, Complex s= Complex{1.f,0.f}) {
   ComplexMatrix a(N1, N2);
@@ -96,6 +98,27 @@ bool test_linsolve() {
     show_arr(b);
 
     linsolve_mat_gpu(xa,xb,xx);
+    xx.to_cpu();
+    cout << "X: " << endl;
+    show_arr(X);
+
+    return true;
+}
+bool test_linsolve_vector() {
+    ComplexMatrix a = createMat(N,N);
+    ComplexVector v = createVector(N);
+    ComplexVector X = createVector(N);
+
+    auto xa = wrap_xmux(a);
+    auto xv = wrap_xmux(v);
+    auto xx = wrap_xmux(X);
+
+    cout << "A: " << endl;
+    show_arr(a);
+    cout << "B: " << endl;
+    show_arr(v);
+
+    linsolve_gpu(xa,xv,xx);
     xx.to_cpu();
     cout << "X: " << endl;
     show_arr(X);

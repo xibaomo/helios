@@ -258,6 +258,7 @@ class XMux : public OptionalDim<Arr> {
   size_t getSize() const { return m_size; }
   Device getDevice() const { return m_dev; }
   dtype* device_data() { return m_device_data; }
+  void setDeviceData(dtype* d_x) { m_device_data = d_x; }
   const dtype* device_data() const { return m_device_data; }
 
   void to_cpu(bool is_transpose = true) {
@@ -283,6 +284,12 @@ class XMux : public OptionalDim<Arr> {
   }
   Arr& cpu() {
     to_cpu();
+    return *m_cpu;
+  }
+  const Arr& cpu() const {
+    if(m_dev==Device::__gpu__) {
+        std::cerr << "GPU data is newer" << std::endl;
+    }
     return *m_cpu;
   }
 
@@ -331,6 +338,9 @@ class XMux : public OptionalDim<Arr> {
       cudaDeviceSynchronize();
     }
   }
+
+  void touchGPU() { m_dev = Device::__gpu__; }
+  void touchCPU() { m_dev = Device::__cpu__; }
 };
 
 template class XMux<ComplexMatrix>;
