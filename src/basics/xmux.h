@@ -17,7 +17,7 @@
 
 template <typename T>
 void transpose_gpu(int m, int n, T* d_A, T* d_B) {
-  if constexpr (!std::is_same_v<T, cuComplex> && !std::is_same_v<T,Complex>) {
+  if constexpr (!std::is_same_v<T, cuComplex> && !std::is_same_v<T, Complex>) {
     std::cerr << "transpose not implemented for non-Complex" << std::endl;
     return;
   }
@@ -97,17 +97,16 @@ class XMux : public OptionalDim<Arr> {
   XMux(size_t s1 = 0, size_t s2 = 0)
       : m_own_cpu(std::make_unique<Arr>()),
         m_cpu(m_own_cpu.get()),
-        m_dev(Device::__cpu__) {
+        m_dev(Device::__gpu__) {
     if constexpr (XMux::is_2D::value) {
       if (s1 > 0 && s2 == 0) s2 = 1;
       this->m_size1 = s1;
       this->m_size2 = s2;
       this->m_size = s1 * s2;
-      m_cpu->resize(s1, s2);
     } else {
       m_size = s1;
-      m_cpu->resize(m_size);
     }
+    CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype)*m_size));
   }
   XMux(const Arr& arr) : m_cpu(const_cast<Arr*>(&arr)) {
     m_dev = Device::__cpu__;
@@ -178,7 +177,6 @@ class XMux : public OptionalDim<Arr> {
         m_cpu(is_internal(other) ? m_own_cpu.get() : other.m_cpu),
         m_device_data(other.m_device_data),
         m_dev(other.m_dev) {
-
     other.m_own_cpu = nullptr;
     other.m_size = 0;
     other.m_device_data = nullptr;
@@ -287,8 +285,8 @@ class XMux : public OptionalDim<Arr> {
     return *m_cpu;
   }
   const Arr& cpu() const {
-    if(m_dev==Device::__gpu__) {
-        std::cerr << "GPU data is newer" << std::endl;
+    if (m_dev == Device::__gpu__) {
+      std::cerr << "GPU data is newer" << std::endl;
     }
     return *m_cpu;
   }
