@@ -16,8 +16,8 @@ XMux<ComplexVector> operator*(const XMux<ComplexMatrix>& A,
                               const XMux<ComplexVector>& v);
 XMux<ComplexMatrix> operator*(const XMux<ComplexMatrix>& A,
                               const XMux<ComplexMatrix>& B);
-XMux<ComplexMatrix> operator+(const XMux<ComplexMatrix>& A,
-                              const XMux<ComplexMatrix>& B);
+// XMux<ComplexMatrix> operator+(const XMux<ComplexMatrix>& A,
+//                               const XMux<ComplexMatrix>& B);
 
 void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B);
 

@@ -231,7 +231,8 @@ void linsolve_right_gpu(const XMux<ComplexMatrix>& A,
 
 XMux<ComplexVector> operator*(const XMux<ComplexMatrix>& A,
                               const XMux<ComplexVector>& v) {
-  A.to_gpu(); v.to_gpu();
+  A.to_gpu();
+  v.to_gpu();
   XMux<ComplexVector> res(v.getSize());
   res.to_gpu();
 
@@ -240,7 +241,7 @@ XMux<ComplexVector> operator*(const XMux<ComplexMatrix>& A,
 
   const cuComplex* d_Ap = (cuComplex*)A.device_data();
   const cuComplex* d_vp = (cuComplex*)v.device_data();
-  cuComplex* d_y = (cuComplex*) res.device_data();
+  cuComplex* d_y = (cuComplex*)res.device_data();
 
   cuComplex* d_A = const_cast<cuComplex*>(d_Ap);
   cuComplex* d_v = const_cast<cuComplex*>(d_vp);
@@ -248,5 +249,33 @@ XMux<ComplexVector> operator*(const XMux<ComplexMatrix>& A,
   auto& handle = CuHandleMgr::getInstance().getCuBlasHandle();
   CUBLAS_CHECK(cublasCgemv(handle, CUBLAS_OP_N, m, n, &CUCOMPLEX_ONE, d_A, m,
                            d_v, 1, &CUCOMPLEX_ZERO, d_y, 1));
+  return res;
+}
+
+XMux<ComplexMatrix> operator*(const XMux<ComplexMatrix>& A,
+                              const XMux<ComplexMatrix>& B) {
+  A.to_gpu();
+  B.to_gpu();
+  int m = A.getSize1();
+  int n = B.getSize2();
+  int k = A.getSize2();
+
+  XMux<ComplexMatrix> res(m, n);
+  res.to_gpu();
+
+  const cuComplex* d_Ap = (cuComplex*)A.device_data();
+  const cuComplex* d_Bp = (cuComplex*)B.device_data();
+  cuComplex* d_C = (cuComplex*)res.device_data();
+
+  cuComplex* d_A = const_cast<cuComplex*>(d_Ap);
+  cuComplex* d_B = const_cast<cuComplex*>(d_Bp);
+
+  auto& handle = CuHandleMgr::getInstance().getCuBlasHandle();
+
+  CUBLAS_CHECK(cublasCgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k,
+                           &CUCOMPLEX_ONE, d_A, m,  // leading dim of A
+                           d_B, k,                  // leading dim of B
+                           &CUCOMPLEX_ZERO, d_C, m  // leading dim of C
+                           ));
   return res;
 }
