@@ -5,8 +5,8 @@ add_executable(run_utest main.cpp
 )
 
 target_link_libraries(run_utest PRIVATE
+    basics
     CUDA::cublas
     CUDA::cusolver
     CUDA::cudart
-    basics
 )

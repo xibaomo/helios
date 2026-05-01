@@ -75,18 +75,19 @@ void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
   XMux<ComplexMatrix> B(b.getSize(), 1);
   Complex* pB = B.cpu().getData();
   const Complex* pb = b.cpu().getData();
-  memcpy(pB,pb,sizeof(Complex)*b.getSize());
-  
-  XMux<ComplexMatrix> X(b.getSize(),1);
-  linsolve_mat_gpu(A,B,X);
-  
+  memcpy(pB, pb, sizeof(Complex) * b.getSize());
+
+  XMux<ComplexMatrix> X(b.getSize(), 1);
+  linsolve_mat_gpu(A, B, X);
+
   Complex* d_X = X.device_data();
-  if(!x.device_data()) {
+  if (!x.device_data()) {
     Complex* d_x;
-    CUDA_CHECK(cudaMalloc(&d_x, sizeof(cuComplex)*b.getSize()));
+    CUDA_CHECK(cudaMalloc(&d_x, sizeof(cuComplex) * b.getSize()));
     x.setDeviceData(d_x);
   }
-  CUDA_CHECK(cudaMemcpy(x.device_data(),d_X,sizeof(cuComplex)*b.getSize(),cudaMemcpyDeviceToDevice));
+  CUDA_CHECK(cudaMemcpy(x.device_data(), d_X, sizeof(cuComplex) * b.getSize(),
+                        cudaMemcpyDeviceToDevice));
   x.touchGPU();
 }
 
@@ -157,4 +158,72 @@ void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B) {
   if (d_work) cudaFree(d_work);
   if (h_work) free(h_work);
   if (params) cusolverDnDestroyParams(params);
+}
+
+void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
+                                XMux<ComplexMatrix>& B) {
+  A.to_gpu(false);
+  B.to_gpu(false);
+  // solve A'X'=B'
+  auto& handle = CuHandleMgr::getInstance().getCuSolverHandle();
+  cusolverDnParams_t params = nullptr;
+
+  CUSOLVER_CHECK(cusolverDnCreateParams(&params));
+
+  void* d_A = A.device_data();
+  void* d_B = B.device_data();
+  int n = A.getSize1();
+  int m = B.getSize1();
+
+  int64_t* d_ipiv = nullptr;
+  int* d_info = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_ipiv, sizeof(int64_t) * n));
+  CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
+  CUDA_CHECK(cudaMemset(d_info, 0, sizeof(int)));
+
+  size_t d_lwork = 0;
+  size_t h_lwork = 0;
+  CUSOLVER_CHECK(cusolverDnXgetrf_bufferSize(handle, params, n, n, CUDA_C_32F,
+                                             d_A, n, CUDA_C_32F, &d_lwork,
+                                             &h_lwork));
+  void* d_work = nullptr;
+  void* h_work = nullptr;
+  if (d_lwork > 0) CUDA_CHECK(cudaMalloc(&d_work, d_lwork));
+  if (h_lwork > 0) h_work = std::malloc(h_lwork);
+
+  CUSOLVER_CHECK(cusolverDnXgetrf(handle, params, n, n, CUDA_C_32F, d_A, n,
+                                  d_ipiv, CUDA_C_32F, d_work, d_lwork, h_work,
+                                  h_lwork, d_info));
+
+  int h_info = 0;
+  CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+  if (h_info != 0) {
+    std::cerr << "LU factorization failed: singlar matrix or error at "
+              << h_info << std::endl;
+  }
+
+  // solve XA=B
+  CUSOLVER_CHECK(cusolverDnXgetrs(
+      handle, params, CUBLAS_OP_N,  // no op since already transpose A and B
+      n, m, CUDA_C_32F, d_A, n, d_ipiv, CUDA_C_32F, d_B, n, d_info));
+
+  CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+  if (h_info) {
+    std::cerr << "linsolve failed with info " << h_info << std::endl;
+  }
+
+  //cleanup
+  if(d_ipiv) cudaFree(d_ipiv);
+  if(d_info) cudaFree(d_info);
+  if(d_work) cudaFree(d_work);
+  if(h_work) std::free(h_work);
+  if(params) cusolverDnDestroyParams(params);
+
+  transpose_gpu(n,m,(cuComplex*)d_B,(cuComplex*)d_B);
+}
+
+void linsolve_right_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexMatrix>& B, XMux<ComplexMatrix>& X) {
+    XMux<ComplexMatrix> A_ = A;
+    X = B;
+    linsolve_right_inplace_gpu(A_,X);
 }

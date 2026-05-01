@@ -14,8 +14,11 @@ static bool test_linsolve();
 static AddUnitTest t_linsolve("test_linsolve", test_linsolve);
 static bool test_linsolve_vector();
 static AddUnitTest t_linsolvevec("test_linsolve_vec", test_linsolve_vector);
+static bool test_linsolve_right();
+static AddUnitTest t_linsolve_right("test_linsolve_right", test_linsolve_right);
 
-static ComplexMatrix createMat(size_t N1, size_t N2, Complex s= Complex{1.f,0.f}) {
+static ComplexMatrix createMat(size_t N1, size_t N2,
+                               Complex s = Complex{1.f, 0.f}) {
   ComplexMatrix a(N1, N2);
   Complex* p = a.getData();
   for (size_t i = 0; i < N1 * N2; i++) {
@@ -24,12 +27,13 @@ static ComplexMatrix createMat(size_t N1, size_t N2, Complex s= Complex{1.f,0.f}
   return a;
 }
 
-static ComplexVector createVector(size_t n, Complex s = Complex{N*N+1.f,0.f}){
-    ComplexVector v(n);
-    for(size_t i=0; i < v.getSize(); i++) {
-        v[i] = Complex{i+0.f,0.f} + s;
-    }
-    return v;
+static ComplexVector createVector(size_t n,
+                                  Complex s = Complex{N * N + 1.f, 0.f}) {
+  ComplexVector v(n);
+  for (size_t i = 0; i < v.getSize(); i++) {
+    v[i] = Complex{i + 0.f, 0.f} + s;
+  }
+  return v;
 }
 
 template <typename T>
@@ -82,46 +86,67 @@ bool test_eig() {
 }
 
 bool test_linsolve() {
-    ComplexMatrix a = createMat(N,N);
-    ComplexVector v = createVector(N);
-    ComplexMatrix b = createMat(N,N,N*N+1.f);
-    ComplexMatrix X = createMat(N,N);
+  ComplexMatrix a = createMat(N, N);
+  ComplexVector v = createVector(N);
+  ComplexMatrix b = createMat(N, N, N * N + 1.f);
+  ComplexMatrix X = createMat(N, N);
 
-    auto xa = wrap_xmux(a);
-    auto xb = wrap_xmux(b);
-    auto xv = wrap_xmux(v);
-    auto xx = wrap_xmux(X);
+  auto xa = wrap_xmux(a);
+  auto xb = wrap_xmux(b);
+  auto xv = wrap_xmux(v);
+  auto xx = wrap_xmux(X);
 
-    cout << "A: " << endl;
-    show_arr(a);
-    cout << "B: " << endl;
-    show_arr(b);
+  cout << "A: " << endl;
+  show_arr(a);
+  cout << "B: " << endl;
+  show_arr(b);
 
-    linsolve_mat_gpu(xa,xb,xx);
-    xx.to_cpu();
-    cout << "X: " << endl;
-    show_arr(X);
+  linsolve_mat_gpu(xa, xb, xx);
+  xx.to_cpu();
+  cout << "X: " << endl;
+  show_arr(X);
 
-    return true;
+  return true;
 }
 bool test_linsolve_vector() {
-    ComplexMatrix a = createMat(N,N);
-    ComplexVector v = createVector(N);
-    ComplexVector X = createVector(N);
+  ComplexMatrix a = createMat(N, N);
+  ComplexVector v = createVector(N);
+  ComplexVector X = createVector(N);
 
-    auto xa = wrap_xmux(a);
-    auto xv = wrap_xmux(v);
-    auto xx = wrap_xmux(X);
+  auto xa = wrap_xmux(a);
+  auto xv = wrap_xmux(v);
+  auto xx = wrap_xmux(X);
 
-    cout << "A: " << endl;
-    show_arr(a);
-    cout << "B: " << endl;
-    show_arr(v);
+  cout << "A: " << endl;
+  show_arr(a);
+  cout << "B: " << endl;
+  show_arr(v);
 
-    linsolve_gpu(xa,xv,xx);
-    xx.to_cpu();
-    cout << "X: " << endl;
-    show_arr(X);
+  linsolve_gpu(xa, xv, xx);
+  xx.to_cpu();
+  cout << "X: " << endl;
+  show_arr(X);
 
-    return true;
+  return true;
+}
+
+bool test_linsolve_right() {
+  ComplexMatrix a = createMat(N, N);
+  ComplexMatrix b = createMat(N, N, N * N + 1.f);
+  ComplexMatrix x = createMat(N, N);
+
+  auto xa = wrap_xmux(a);
+  auto xb = wrap_xmux(b);
+  auto xx = wrap_xmux(x);
+
+  cout << "A: " << endl;
+  show_arr(a);
+  cout << "B: " << endl;
+  show_arr(b);
+  linsolve_right_gpu(xa, xb, xx);
+  xx.to_cpu();
+  cout << "X=BA^-1: " << endl;
+  show_arr(x);
+
+  return true;
 }

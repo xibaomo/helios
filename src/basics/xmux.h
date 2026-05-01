@@ -17,7 +17,7 @@
 
 template <typename T>
 void transpose_gpu(int m, int n, T* d_A, T* d_B) {
-  if constexpr (!std::is_same_v<T, Complex>) {
+  if constexpr (!std::is_same_v<T, cuComplex> && !std::is_same_v<T,Complex>) {
     std::cerr << "transpose not implemented for non-Complex" << std::endl;
     return;
   }
