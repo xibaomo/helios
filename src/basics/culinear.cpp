@@ -212,18 +212,41 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
     std::cerr << "linsolve failed with info " << h_info << std::endl;
   }
 
-  //cleanup
-  if(d_ipiv) cudaFree(d_ipiv);
-  if(d_info) cudaFree(d_info);
-  if(d_work) cudaFree(d_work);
-  if(h_work) std::free(h_work);
-  if(params) cusolverDnDestroyParams(params);
+  // cleanup
+  if (d_ipiv) cudaFree(d_ipiv);
+  if (d_info) cudaFree(d_info);
+  if (d_work) cudaFree(d_work);
+  if (h_work) std::free(h_work);
+  if (params) cusolverDnDestroyParams(params);
 
-  transpose_gpu(n,m,(cuComplex*)d_B,(cuComplex*)d_B);
+  transpose_gpu(n, m, (cuComplex*)d_B, (cuComplex*)d_B);
 }
 
-void linsolve_right_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexMatrix>& B, XMux<ComplexMatrix>& X) {
-    XMux<ComplexMatrix> A_ = A;
-    X = B;
-    linsolve_right_inplace_gpu(A_,X);
+void linsolve_right_gpu(const XMux<ComplexMatrix>& A,
+                        const XMux<ComplexMatrix>& B, XMux<ComplexMatrix>& X) {
+  XMux<ComplexMatrix> A_ = A;
+  X = B;
+  linsolve_right_inplace_gpu(A_, X);
+}
+
+XMux<ComplexVector> operator*(const XMux<ComplexMatrix>& A,
+                              const XMux<ComplexVector>& v) {
+  A.to_gpu(); v.to_gpu();
+  XMux<ComplexVector> res(v.getSize());
+  res.to_gpu();
+
+  int m = A.getSize1();
+  int n = v.getSize();
+
+  const cuComplex* d_Ap = (cuComplex*)A.device_data();
+  const cuComplex* d_vp = (cuComplex*)v.device_data();
+  cuComplex* d_y = (cuComplex*) res.device_data();
+
+  cuComplex* d_A = const_cast<cuComplex*>(d_Ap);
+  cuComplex* d_v = const_cast<cuComplex*>(d_vp);
+
+  auto& handle = CuHandleMgr::getInstance().getCuBlasHandle();
+  CUBLAS_CHECK(cublasCgemv(handle, CUBLAS_OP_N, m, n, &CUCOMPLEX_ONE, d_A, m,
+                           d_v, 1, &CUCOMPLEX_ZERO, d_y, 1));
+  return res;
 }

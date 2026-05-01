@@ -16,6 +16,8 @@ static bool test_linsolve_vector();
 static AddUnitTest t_linsolvevec("test_linsolve_vec", test_linsolve_vector);
 static bool test_linsolve_right();
 static AddUnitTest t_linsolve_right("test_linsolve_right", test_linsolve_right);
+static bool test_matvec();
+static AddUnitTest t_matvec("test_matvec", test_matvec);
 
 static ComplexMatrix createMat(size_t N1, size_t N2,
                                Complex s = Complex{1.f, 0.f}) {
@@ -148,5 +150,24 @@ bool test_linsolve_right() {
   cout << "X=BA^-1: " << endl;
   show_arr(x);
 
+  return true;
+}
+
+bool test_matvec() {
+  ComplexMatrix a = createMat(N, N);
+  ComplexVector b = createVector(N, N * N + 1.f);
+
+  auto xa = wrap_xmux(a);
+  auto xb = wrap_xmux(b);
+//   auto xx = wrap_xmux(x);
+
+  cout << "A: " << endl;
+  show_arr(a);
+  cout << "B: " << endl;
+  show_arr(b);
+  XMux<ComplexVector> xx = xa * xb;
+  xx.to_cpu();
+  cout << "a*b: " << endl;
+  show_arr(xx.cpu());
   return true;
 }
