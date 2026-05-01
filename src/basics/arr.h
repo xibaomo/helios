@@ -2,6 +2,7 @@
 #include <complex>
 #include <cstring>
 #include <memory>
+#include "types.h"
 
 template <typename T>
 class Array1D {
@@ -82,7 +83,17 @@ class Array1D {
       m_data[i] = fn(m_data[i], others[i]...);
     }
   }
+
+  Real norm() const {
+    Real s = 0.f;
+    for(size_t i=0; i < m_size; i++){
+      s+=abs(m_data[i])*abs(m_data[i]);
+    }
+    return std::sqrt(s);
+  }
 };
+
+// *****************************************************************************
 
 template <typename T>
 class Array2D : public Array1D<T> {

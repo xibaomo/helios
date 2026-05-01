@@ -110,6 +110,10 @@ bool test_linsolve() {
   cout << "X: " << endl;
   show_arr(X);
 
+  XMux<ComplexMatrix> b_res = xa*xx;
+  cout << "AX: " << endl;
+  show_arr(b_res.cpu());
+
   return true;
 }
 bool test_linsolve_vector() {
@@ -131,6 +135,10 @@ bool test_linsolve_vector() {
   cout << "X: " << endl;
   show_arr(X);
 
+  XMux<ComplexVector> b = xa*xx;
+  cout << "AX: " << endl;
+  show_arr(b.cpu());
+
   return true;
 }
 
@@ -151,6 +159,12 @@ bool test_linsolve_right() {
   xx.to_cpu();
   cout << "X=BA^-1: " << endl;
   show_arr(x);
+
+  XMux<ComplexMatrix> b_res = xx * xa;
+  cout << "XA: " << endl;
+  show_arr(b_res.cpu());
+  b.for_each([](Complex& a, Complex& b) { return a - b; }, b_res.cpu());
+  if (b.norm() > 1.e-4) return false;
 
   return true;
 }
