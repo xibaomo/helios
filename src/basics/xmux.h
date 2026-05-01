@@ -1,3 +1,13 @@
+/**
+ * This file defines class XMux. XMux is desgiend to be a shell of CPU array
+ * with additional device pointer. The shell should be mapped to a certain cpu
+ * array, like human's skin, operations on the skin is equivalent to operating
+ * on the human, but cannot exchange skins between humans.
+ *
+ * In most cases, XMux is bound to an existing CPU array. In minor cases, XMux
+ * may hold its own array. After creation of XMux, its m_cpu must point to an
+ * array (external or internal) and no longer changes.
+ */
 #pragma once
 #include "arr.h"
 #include "cuhandlemgr.h"
@@ -57,8 +67,8 @@ struct Dim2D {
 };
 template <typename T>
 using OptionalDim =
-    std::conditional_t<std::is_base_of_v<Array2D<typename T::dtype>, T>,
-                       Dim2D, Empty>;
+    std::conditional_t<std::is_base_of_v<Array2D<typename T::dtype>, T>, Dim2D,
+                       Empty>;
 
 template <typename Arr>
 class XMux : public OptionalDim<Arr> {
@@ -68,17 +78,36 @@ class XMux : public OptionalDim<Arr> {
 
  private:
   std::unique_ptr<Arr> m_own_cpu;
-  Arr* m_cpu;
+  Arr* const m_cpu;  // bound to an address, but content may change
   mutable dtype* m_device_data = nullptr;  // col major on gpu
   size_t m_size;
   mutable Device m_dev = Device::__gpu__;
+
+  static bool is_internal(const XMux& other) {
+    return other.m_own_cpu && (other.m_cpu == other.m_own_cpu.get());
+  }
 
  public:
   ~XMux() {
     if (m_device_data) {
       CUDA_CHECK(cudaFree(m_device_data));
     }
+  }
 
+  XMux(size_t s1 = 0, size_t s2 = 0)
+      : m_own_cpu(std::make_unique<Arr>()),
+        m_cpu(m_own_cpu.get()),
+        m_dev(Device::__cpu__) {
+    if constexpr (XMux::is_2D::value) {
+      if (s1 > 0 && s2 == 0) s2 = 1;
+      this->m_size1 = s1;
+      this->m_size2 = s2;
+      this->m_size = s1 * s2;
+      m_cpu->resize(s1, s2);
+    } else {
+      m_size = s1;
+      m_cpu->resize(m_size);
+    }
   }
   XMux(const Arr& arr) : m_cpu(const_cast<Arr*>(&arr)) {
     m_dev = Device::__cpu__;
@@ -89,7 +118,8 @@ class XMux : public OptionalDim<Arr> {
     }
   }
 
-  XMux(const XMux& other) {
+  XMux(const XMux& other)
+      : m_own_cpu(std::make_unique<Arr>()), m_cpu(m_own_cpu.get()) {
     m_size = other.m_size;
     m_dev = other.m_dev;
     if constexpr (XMux::is_2D::value) {
@@ -97,9 +127,9 @@ class XMux : public OptionalDim<Arr> {
       this->m_size2 = other.m_size2;
     }
     if (other.m_dev == Device::__cpu__) {
-      m_own_cpu = std::make_unique<Arr>(*other.m_cpu);
-      m_cpu = m_own_cpu.get();
+      *m_cpu = *(other.m_cpu);
     }
+
     if (other.m_dev == Device::__gpu__) {
       if (other.m_device_data) {
         CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
@@ -123,8 +153,13 @@ class XMux : public OptionalDim<Arr> {
         m_device_data = nullptr;
       }
       if (other.m_dev == Device::__cpu__) {
-        m_own_cpu = std::make_unique<Arr>(*other.m_cpu);
-        m_cpu = m_own_cpu.get();
+        if (other.m_cpu) {  // both have hosts, copy host
+          *(this->m_cpu) = *(other.m_cpu);
+
+        } else {  // both has no host, report error
+          std::cerr << "Error: the other has no valid host, cannot copy!"
+                    << std::endl;
+        }
       }
       if (other.m_dev == Device::__gpu__) {
         CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
@@ -139,11 +174,11 @@ class XMux : public OptionalDim<Arr> {
   // move constructor
   XMux(XMux&& other) noexcept
       : OptionalDim<Arr>(std::move(other)),
-        m_own_cpu(std::move(other.m_own_cpu)),
-        m_cpu(other.m_cpu),
+        m_own_cpu(is_internal(other) ? std::move(other.m_own_cpu) : nullptr),
+        m_cpu(is_internal(other) ? m_own_cpu.get() : other.m_cpu),
         m_device_data(other.m_device_data),
         m_dev(other.m_dev) {
-    other.m_cpu = nullptr;
+
     other.m_own_cpu = nullptr;
     other.m_size = 0;
     other.m_device_data = nullptr;
@@ -157,24 +192,17 @@ class XMux : public OptionalDim<Arr> {
         this->m_size1 = other.m_size1;
         this->m_size2 = other.m_size2;
       }
-      m_own_cpu.reset();
-      m_cpu = nullptr;
+
       if (m_dev == Device::__gpu__) {
         if (m_device_data) CUDA_CHECK(cudaFree(m_device_data));
         m_device_data = other.m_device_data;
       }
       if (m_dev == Device::__cpu__) {
-        if (other.isOwn()) {
-          m_own_cpu = std::move(other.m_own_cpu);
-          m_cpu = m_own_cpu.get();
-        } else {
-          m_cpu = other.m_cpu;
-        }
+        *m_cpu = std::move(*other.m_cpu);
       }
       other.m_device_data = nullptr;
       other.m_own_cpu.reset();
       other.m_own_cpu = nullptr;
-      other.m_cpu = nullptr;
       other.m_size = 0;
     }
     return *this;
@@ -184,39 +212,32 @@ class XMux : public OptionalDim<Arr> {
     return false;
   }
 
-  XMux(size_t rows = 0, size_t cols = 0) {
-    m_own_cpu = std::make_unique<Arr>();
-    m_cpu = m_own_cpu.get();
-    if (rows > 0 && cols == 0) cols = 1;
-    resize(rows, cols);
-  }
-
-  void resize(size_t rows, size_t cols) {
-    m_size = rows * cols;
-    size_t old_size = m_size;
-    if constexpr (XMux::is_2D::value) {
-      this->m_size1 = rows;
-      this->m_size2 = cols;
-    }
-    m_size = rows * cols;
-    if (m_size == 0) {
-      m_own_cpu.reset();
-      return;
-    }
-    if (m_dev == Device::__cpu__) {
-      if constexpr (XMux::is_2D::value) {
-        m_cpu->resize(this->m_size1, this->m_size2);
-      } else {
-        m_cpu->resize(this->m_size);
-      }
-    }
-    if (m_dev == Device::__gpu__) {
-      if (old_size != m_size) {
-        CUDA_CHECK(cudaFree(m_device_data));
-      }
-      CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
-    }
-  }
+  //   void resize(size_t rows, size_t cols) {
+  //     m_size = rows * cols;
+  //     size_t old_size = m_size;
+  //     if constexpr (XMux::is_2D::value) {
+  //       this->m_size1 = rows;
+  //       this->m_size2 = cols;
+  //     }
+  //     m_size = rows * cols;
+  //     if (m_size == 0) {
+  //       m_own_cpu.reset();
+  //       return;
+  //     }
+  //     if (m_dev == Device::__cpu__) {
+  //       if constexpr (XMux::is_2D::value) {
+  //         m_cpu->resize(this->m_size1, this->m_size2);
+  //       } else {
+  //         m_cpu->resize(this->m_size);
+  //       }
+  //     }
+  //     if (m_dev == Device::__gpu__) {
+  //       if (old_size != m_size) {
+  //         CUDA_CHECK(cudaFree(m_device_data));
+  //       }
+  //       CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
+  //     }
+  //   }
 
   size_t getSize1() const {
     if constexpr (XMux::is_2D::value) {
@@ -316,7 +337,7 @@ template class XMux<ComplexMatrix>;
 template class XMux<ComplexVector>;
 
 template <typename V>
-XMux<V> wrap_xmux(const V& obj){
-    XMux<V> res(obj);
-    return res;
+XMux<V> wrap_xmux(const V& obj) {
+  XMux<V> res(obj);
+  return res;
 }

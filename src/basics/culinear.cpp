@@ -69,3 +69,75 @@ void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
   free(h_work);
   CUSOLVER_CHECK(cusolverDnDestroyParams(params));
 }
+
+void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
+                  XMux<ComplexVector>& x) {}
+
+void linsolve_mat_gpu(const XMux<ComplexMatrix>& A,
+                      const XMux<ComplexMatrix>& B, XMux<ComplexMatrix>& X) {
+  XMux<ComplexMatrix> A_ = A;
+  X = B;
+  linsolve_inplace_gpu(A_, X);
+}
+
+void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B) {
+  A.to_gpu();
+  B.to_gpu();
+  cusolverDnParams_t params = nullptr;
+
+  auto& handle = CuHandleMgr::getInstance().getCuSolverHandle();
+  CUSOLVER_CHECK(cusolverDnCreateParams(&params));
+  int n = A.getSize1();
+  int nrhs = B.getSize2();
+
+  void* d_A = (void*)A.device_data();
+  void* d_B = (void*)B.device_data();
+
+  int64_t* d_ipiv = nullptr;
+  int* d_info = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_ipiv, sizeof(int64_t) * n));
+  CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
+  CUDA_CHECK(cudaMemset(d_info, 0, sizeof(int)));
+
+  // workspace query
+  size_t d_lwork = 0, h_lwork = 0;
+  CUSOLVER_CHECK(cusolverDnXgetrf_bufferSize(handle, params, n, n, CUDA_C_32F,
+                                             d_A, n, CUDA_C_32F, &d_lwork,
+                                             &h_lwork));
+
+  void* d_work = nullptr;
+  void* h_work = nullptr;
+  if (d_lwork > 0) CUDA_CHECK(cudaMalloc(&d_work, d_lwork));
+  if (h_lwork > 0) h_work = malloc(h_lwork);
+
+  // factorization LU: A = P*L*U, detect singularity
+  CUSOLVER_CHECK(cusolverDnXgetrf(handle, params, n, n, CUDA_C_32F, d_A, n,
+                                  d_ipiv, CUDA_C_32F, d_work, d_lwork, h_work,
+                                  h_lwork, d_info));
+
+  int h_info = 0;
+  CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+  if (h_info > 0) {
+    std::cerr << "LU factorization fails: Matrix U is singular at row: "
+              << h_info << std::endl;
+  } else if (h_info < 0) {
+    std::cerr << "LU factorization fails: illegal value found at parameter: "
+              << -h_info << std::endl;
+  }
+
+  // solve AX=B, B is overwritten with X
+  CUSOLVER_CHECK(cusolverDnXgetrs(handle, params, CUBLAS_OP_N, n, nrhs,
+                                  CUDA_C_32F, d_A, n, d_ipiv, CUDA_C_32F, d_B,
+                                  n, d_info));
+
+  CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+  if (h_info != 0) {
+    std::cerr << "Linsolve failed: Info = " << h_info << std::endl;
+  }
+
+  if (d_ipiv) cudaFree(d_ipiv);
+  if (d_info) cudaFree(d_info);
+  if (d_work) cudaFree(d_work);
+  if (h_work) free(h_work);
+  if (params) cusolverDnDestroyParams(params);
+}

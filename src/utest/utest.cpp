@@ -5,6 +5,7 @@
 using namespace std;
 
 int UnitTest::execute(const String& key, UTestFunc fp) {
+  cout << "running utest: " << key << " ..." << endl;
   auto pass = fp();
   if (pass) {
     cout << key << " runs through successfully" << endl;
