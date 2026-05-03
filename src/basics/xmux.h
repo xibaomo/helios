@@ -340,6 +340,8 @@ class XMux : public OptionalDim<Arr> {
   void touchGPU() { m_dev = Device::__gpu__; }
   void touchCPU() { m_dev = Device::__cpu__; }
 
+  void add(const XMux<Arr>& other);
+
 //   template <typename F, typename... OtherArrs>
 //   void for_each(F fn, XMux<OtherArrs>&... others);
 };
