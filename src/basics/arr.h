@@ -2,6 +2,7 @@
 #include <complex>
 #include <cstring>
 #include <memory>
+
 #include "types.h"
 
 template <typename T>
@@ -70,7 +71,7 @@ class Array1D {
   }
 
   T* getData() { return m_data.get(); }
-  const T* getData() const { return m_data.get();}
+  const T* getData() const { return m_data.get(); }
 
   size_t getSize() const { return m_size; }
 
@@ -86,8 +87,8 @@ class Array1D {
 
   Real norm() const {
     Real s = 0.f;
-    for(size_t i=0; i < m_size; i++){
-      s+=abs(m_data[i])*abs(m_data[i]);
+    for (size_t i = 0; i < m_size; i++) {
+      s += abs(m_data[i]) * abs(m_data[i]);
     }
     return std::sqrt(s);
   }
@@ -107,7 +108,8 @@ class Array2D : public Array1D<T> {
   void resize(size_t s1, size_t s2) {
     m_size1 = s1;
     m_size2 = s2;
-    Array1D<T>::resize(s1*s2);
+    Array1D<T>::resize(s1 * s2);
+    Array1D<T>::zero();
   }
 
   Array2D(const Array2D<T>& other)
@@ -149,6 +151,12 @@ class Array2D : public Array1D<T> {
   size_t getSize1() const { return m_size1; }
   size_t getSize2() const { return m_size2; }
 
+  void eye() {
+    Array1D<T>::zero();
+    for (size_t i = 0; i < m_size1; i++) {
+      (*this)[i][i] = 1.f;
+    }
+  }
 };
 typedef std::complex<float> Complex;
 
