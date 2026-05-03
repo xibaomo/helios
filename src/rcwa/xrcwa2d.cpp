@@ -1,6 +1,24 @@
 #include "xrcwa2d.h"
-#include "xmux.h"
+
 #include "culinear.h"
+#include "xmux.h"
+
+SMat XRcwa2D::createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
+                              const ComplexMatrix& Lambda, Real thickness) {
+  auto xW0 = wrap_xmux(m_W0);
+  auto xV0 = wrap_xmux(m_V0);
+  auto xW = wrap_xmux(W);
+  auto xV = wrap_xmux(V);
+  auto xL = wrap_xmux(Lambda);
+
+  XMux<ComplexMatrix> A1(W.getSize1(),W.getSize2());
+  XMux<ComplexMatrix> A2(W.getSize1(),W.getSize2());
+  linsolve_mat_gpu(xW,xW0,A1);
+  linsolve_mat_gpu(xV,xV0,A2);
+
+  return SMat();
+}
+
 void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
   m_thicknessList.push_back(thickness);
   ComplexMatrix Kx2(m_orderN, m_orderN);
@@ -53,4 +71,9 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
 
   linsolve_right_gpu(xL, xQ, xV);
   xV.to_cpu();
+
+  if (eps == COMPLEX_ONE) {
+    m_W0 = W;
+    m_V0 = V;
+  }
 }

@@ -106,7 +106,7 @@ class XMux : public OptionalDim<Arr> {
     } else {
       m_size = s1;
     }
-    CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype)*m_size));
+    CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
   }
   XMux(const Arr& arr) : m_cpu(const_cast<Arr*>(&arr)) {
     m_dev = Device::__cpu__;
@@ -339,6 +339,9 @@ class XMux : public OptionalDim<Arr> {
 
   void touchGPU() { m_dev = Device::__gpu__; }
   void touchCPU() { m_dev = Device::__cpu__; }
+
+//   template <typename F, typename... OtherArrs>
+//   void for_each(F fn, XMux<OtherArrs>&... others);
 };
 
 template class XMux<ComplexMatrix>;

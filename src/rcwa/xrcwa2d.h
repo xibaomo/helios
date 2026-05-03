@@ -3,14 +3,12 @@
 #include "physical_constants.h"
 #include "types.h"
 
-class XRcwa2D {
-  struct SMat {
-    ComplexMatrix s11;
-    ComplexMatrix s12;
-    ComplexMatrix s21;
-    ComplexMatrix s22;
-  };
+struct SMat {
+  ComplexMatrix s11;  // reflection
+  ComplexMatrix s12;  // transmission
+};
 
+class XRcwa2D {
  private:
   Real m_lambda;
   int m_orderXY[2];
@@ -29,6 +27,10 @@ class XRcwa2D {
 
   Complex m_kx_inc = -1;  // unit of k0
   Complex m_ky_inc = -1;  // unit of k0
+
+  //vacuum eigen vectors
+  ComplexMatrix m_W0;
+  ComplexMatrix m_V0; 
 
  public:
   XRcwa2D(Real lambda, Real Lx, Real Ly, size_t order_x, size_t order_y,
@@ -52,10 +54,15 @@ class XRcwa2D {
 
     m_kx_inc = std::sin(theta) * std::cos(phi) * std::sqrt(in_eps);
     m_ky_inc = std::sin(theta) * std::sin(phi) * std::sqrt(in_eps);
+
   }
 
   void addUniformLayer(const Complex& eps, Real thickness);
   void addPatternLayer(const Array2D<Complex>& eps, Real thickness);
 
   void buildGlobalScatterMatrix();
+
+  SMat createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
+                       const ComplexMatrix& Lambda, Real thickness);
+
 };
