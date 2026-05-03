@@ -11,18 +11,41 @@ __global__ void ops_each_knl(Func f, T* d_A, int n, Args... others) {
   }
 }
 
-template <typename T>
-__device__ __forceinline__ T add_elem(T a, T b) {
-  if constexpr (std::is_same_v<T, cuComplex>) {
-    return cuCaddf(a, b);
-  } else {
-    return a + b;
-  }
-}
+// template <typename T>
+// __device__ __forceinline__ T add_elem(T a, T b) {
+//   if constexpr (std::is_same_v<T, cuComplex>) {
+//     return cuCaddf(a, b);
+//   } else {
+//     return a + b;
+//   }
+// }
 
 template <typename Arr>
 void XMux<Arr>::add(const XMux<Arr>& other) {
-  auto op = [] __device__(cuComplex & a, cuComplex & b) { return add_elem(a, b); };
+  auto op = [] __device__ (auto & a, auto & b) {
+    using T = std::decay_t<decltype(a)>;
+    if constexpr (std::is_same_v<T, cuComplex>) {
+      return cuCaddf(a, b);
+    } else {
+      return a + b;
+    }
+  };
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+                                          (int)m_size,
+                                          (cuComplex*)other.device_data());
+  cudaDeviceSynchronize();
+}
+
+template <typename Arr>
+void XMux<Arr>::sub(const XMux<Arr>& other) {
+  auto op = [] __device__ (auto & a, auto & b) {
+    using T = std::decay_t<decltype(a)>;
+    if constexpr (std::is_same_v<T, cuComplex>) {
+      return cuCsubf(a,b);
+    } else {
+      return a - b;
+    }
+  };
   ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
                                           (int)m_size,
                                           (cuComplex*)other.device_data());

@@ -5,18 +5,58 @@
 
 SMat XRcwa2D::createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
                               const ComplexMatrix& Lambda, Real thickness) {
+  ComplexMatrix X(W.getSize1(), W.getSize2());
+  Real k0 = 2 * Pi / m_lambda;
+  for (size_t i = 0; i < X.getSize1(); i++) {
+    Complex tmp = -Lambda[i][i] * k0 * thickness;
+    X[i][i] = std::exp(tmp);
+  }
+
   auto xW0 = wrap_xmux(m_W0);
   auto xV0 = wrap_xmux(m_V0);
   auto xW = wrap_xmux(W);
   auto xV = wrap_xmux(V);
   auto xL = wrap_xmux(Lambda);
+  auto xX = wrap_xmux(X);
 
-  XMux<ComplexMatrix> A1(W.getSize1(),W.getSize2());
-  XMux<ComplexMatrix> A2(W.getSize1(),W.getSize2());
-  linsolve_mat_gpu(xW,xW0,A1);
-  linsolve_mat_gpu(xV,xV0,A2);
+  XMux<ComplexMatrix> A1(W.getSize1(), W.getSize2());
+  XMux<ComplexMatrix> A2(W.getSize1(), W.getSize2());
+  linsolve_mat_gpu(xW, xW0, A1);
+  linsolve_mat_gpu(xV, xV0, A2);
 
-  return SMat();
+  A1.add(A2);
+
+  XMux<ComplexMatrix> B1(W.getSize1(), W.getSize2());
+  XMux<ComplexMatrix> B2 = B1;
+  linsolve_mat_gpu(xW, xW0, B1);
+  linsolve_mat_gpu(xV, xV0, B2);
+  B1.sub(B2);
+
+  // compute U = (A-XBA^-1XB)
+  // compute K = A^-1 X
+  XMux<ComplexMatrix> K(W.getSize1(), W.getSize2());
+  XMux<ComplexMatrix> U = A1;
+  linsolve_mat_gpu(A1, xX, K);
+  XMux<ComplexMatrix> U1 = xX * B1 * K * B1;
+  U.sub(U1);
+  // compute G=XBA^-1XA-B
+  XMux<ComplexMatrix> G = xX * B1 * K * A1;
+  G.sub(B1);
+
+  SMat sm;
+  linsolve_mat_gpu(U, G, sm.s11);
+
+  XMux<ComplexMatrix> C;
+  linsolve_mat_gpu(A1, B1, C);  // C=A^-1 B
+  C = B1 * C;
+  XMux<ComplexMatrix> C1 = A1;
+  C1.sub(C);
+
+  XMux<ComplexMatrix> C2;
+  linsolve_mat_gpu(U, xX, C2);
+  sm.s12 = C2 * C1;
+
+  return sm;
 }
 
 void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
@@ -76,4 +116,7 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
     m_W0 = W;
     m_V0 = V;
   }
+
+  SMat sm = createLayerSmat(W, V, Lambda, thickness);
+  m_scatterMatrices.emplace_back(std::move(sm));
 }

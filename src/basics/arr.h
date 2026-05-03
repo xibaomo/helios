@@ -147,6 +147,7 @@ class Array2D : public Array1D<T> {
   }
 
   T* operator[](size_t i) { return this->m_data.get() + m_size2 * i; }
+  const T* operator[](size_t i) const { return this->m_data.get() + m_size2 * i; }
 
   size_t getSize1() const { return m_size1; }
   size_t getSize2() const { return m_size2; }

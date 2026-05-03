@@ -2,10 +2,11 @@
 #include "arr.h"
 #include "physical_constants.h"
 #include "types.h"
+#include "xmux.h"
 
 struct SMat {
-  ComplexMatrix s11;  // reflection
-  ComplexMatrix s12;  // transmission
+  XMux<ComplexMatrix> s11;  // reflection
+  XMux<ComplexMatrix> s12;  // transmission
 };
 
 class XRcwa2D {
