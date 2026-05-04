@@ -58,8 +58,9 @@ class Array1D {
   }
 
   void resize(size_t s) {
+    if (s!=m_size) m_data.reset();
     m_size = s;
-    if (s > 0) {
+    if (s > 0 && !m_data) {
       m_data = std::make_unique<T[]>(s);
     }
   }
