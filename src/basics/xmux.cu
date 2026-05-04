@@ -68,15 +68,14 @@ void XMux<Arr>::scale(Real s) {
 
 template <typename Arr>
 void XMux<Arr>::ones() {
-  auto op = [] __device__ (cuComplex a){
-    return make_cuComplex(1.f,0.f);
-  };
+  auto op = [] __device__(cuComplex a) { return make_cuComplex(1.f, 0.f); };
 
-  ops_each_knl<<<GRID_SIZE,BLOCK_SIZE>>>(op,(cuComplex*)m_device_data, (int)m_size);
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+                                          (int)m_size);
   cudaDeviceSynchronize();
-  
+
   cudaError_t err = cudaGetLastError();
-if (err != cudaSuccess) {
-  printf("CUDA error: %s\n", cudaGetErrorString(err));
-}
+  if (err != cudaSuccess) {
+    printf("CUDA error: %s\n", cudaGetErrorString(err));
+  }
 }

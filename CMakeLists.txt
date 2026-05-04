@@ -7,7 +7,7 @@ project(helios VERSION 0.1.0 LANGUAGES C CXX CUDA)
 find_package(CUDAToolkit REQUIRED)
 set(CMAKE_CUDA_ARCHITECTURES native)
 set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda -arch=sm_86")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
 
 set(CUDA_DIR /usr/local/cuda-12.9)
 include_directories(${CUDA_DIR}/include)
