@@ -3,6 +3,7 @@
 #include <cuComplex.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#include <cufft.h>
 #include <cusolverDn.h>
 
 void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
@@ -234,7 +235,7 @@ XMux<ComplexVector> operator*(const XMux<ComplexMatrix>& A,
   A.to_gpu();
   v.to_gpu();
   XMux<ComplexVector> res(v.getSize());
-//   res.to_gpu();
+  //   res.to_gpu();
 
   int m = A.getSize1();
   int n = v.getSize();
@@ -261,7 +262,7 @@ XMux<ComplexMatrix> operator*(const XMux<ComplexMatrix>& A,
   int k = A.getSize2();
 
   XMux<ComplexMatrix> res(m, n);
-//   res.to_gpu();
+  //   res.to_gpu();
 
   const cuComplex* d_Ap = (cuComplex*)A.device_data();
   const cuComplex* d_Bp = (cuComplex*)B.device_data();
@@ -278,4 +279,23 @@ XMux<ComplexMatrix> operator*(const XMux<ComplexMatrix>& A,
                            &CUCOMPLEX_ZERO, d_C, m  // leading dim of C
                            ));
   return res;
+}
+
+void fft2d(XMux<ComplexMatrix>& xa) {
+  xa.to_gpu();
+
+  auto& plan = CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(), xa.getSize2());
+  cuComplex* d_a = (cuComplex*)xa.device_data();
+
+  cufftExecC2C(plan, d_a, d_a, CUFFT_FORWARD);
+
+}
+
+void ifft2d(XMux<ComplexMatrix>& xa, Real s){
+    xa.to_gpu();
+    auto& plan = CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(),xa.getSize2());
+    cuComplex* d_a = (cuComplex*)xa.device_data();
+    cufftExecC2C(plan, d_a, d_a, CUFFT_INVERSE);
+
+    xa.scale(s);
 }

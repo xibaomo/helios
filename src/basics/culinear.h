@@ -25,3 +25,6 @@ void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B);
 void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B);
 void linsolve_right_gpu(const XMux<ComplexMatrix>& A,
                         const XMux<ComplexMatrix>& B, XMux<ComplexMatrix>& X);
+
+void fft2d(XMux<ComplexMatrix>& a);
+void ifft2d(XMux<ComplexMatrix>& a, Real s=1.f);

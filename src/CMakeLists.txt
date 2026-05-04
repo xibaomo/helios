@@ -9,4 +9,5 @@ target_link_libraries(helios PRIVATE
     CUDA::cudart
     CUDA::cublas
     CUDA::cusolver
+    CUDA::cufft
 )

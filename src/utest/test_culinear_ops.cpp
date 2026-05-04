@@ -20,6 +20,8 @@ static bool test_matvec();
 static AddUnitTest t_matvec("test_matvec", test_matvec);
 static bool test_matmul();
 static AddUnitTest t_matmul("test_matmul", test_matmul);
+static bool test_fft2d();
+static AddUnitTest t_fft2d("test_fft2d", test_fft2d);
 
 static ComplexMatrix createMat(size_t N1, size_t N2,
                                Complex s = Complex{1.f, 0.f}) {
@@ -110,7 +112,7 @@ bool test_linsolve() {
   cout << "X: " << endl;
   show_arr(X);
 
-  XMux<ComplexMatrix> b_res = xa*xx;
+  XMux<ComplexMatrix> b_res = xa * xx;
   cout << "AX: " << endl;
   show_arr(b_res.cpu());
 
@@ -135,7 +137,7 @@ bool test_linsolve_vector() {
   cout << "X: " << endl;
   show_arr(X);
 
-  XMux<ComplexVector> b = xa*xx;
+  XMux<ComplexVector> b = xa * xx;
   cout << "AX: " << endl;
   show_arr(b.cpu());
 
@@ -204,5 +206,23 @@ bool test_matmul() {
   xx.to_cpu();
   cout << "a*b: " << endl;
   show_arr(xx.cpu());
+  return true;
+}
+
+bool test_fft2d() {
+  ComplexMatrix a = createMat(N, N);
+  auto xa = wrap_xmux(a);
+
+  cout << "A: " << endl;
+  show_arr(a);
+  fft2d(xa);
+  xa.to_cpu();
+  cout << "fft2d: " << endl;
+  show_arr(xa.cpu());
+
+  ifft2d(xa, 1.f / (N * N));
+  cout << "ifft2d: " << endl;
+  show_arr(xa.cpu());
+
   return true;
 }

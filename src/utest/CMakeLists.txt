@@ -9,4 +9,5 @@ target_link_libraries(run_utest PRIVATE
     CUDA::cublas
     CUDA::cusolver
     CUDA::cudart
+    CUDA::cufft
 )

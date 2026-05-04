@@ -343,6 +343,10 @@ class XMux : public OptionalDim<Arr> {
   void add(const XMux<Arr>& other);
   void sub(const XMux<Arr>& other);
 
+  void scale(Real s); //each * s;
+
+  void ones();
+
 //   template <typename F, typename... OtherArrs>
 //   void for_each(F fn, XMux<OtherArrs>&... others);
 };
