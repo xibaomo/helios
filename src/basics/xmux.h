@@ -79,7 +79,7 @@ class XMux : public OptionalDim<Arr> {
  private:
   std::unique_ptr<Arr> m_own_cpu;
   Arr* const m_cpu;  // bound to an address, but content may change
-  mutable dtype* m_device_data = nullptr;  // col major on gpu
+  mutable void* m_device_data = nullptr;  // col major on gpu
   size_t m_size;
   mutable Device m_dev = Device::__gpu__;
 
@@ -255,9 +255,9 @@ class XMux : public OptionalDim<Arr> {
 
   size_t getSize() const { return m_size; }
   Device getDevice() const { return m_dev; }
-  dtype* device_data() { return m_device_data; }
+  void* device_data() { return m_device_data; }
   void setDeviceData(dtype* d_x) { m_device_data = d_x; }
-  const dtype* device_data() const { return m_device_data; }
+  const void* device_data() const { return m_device_data; }
 
   void to_cpu(bool is_transpose = true) {
     if (m_dev == Device::__gpu__ && m_device_data) {
@@ -325,7 +325,7 @@ class XMux : public OptionalDim<Arr> {
       size_t dpitch = this->m_size1 * sizeof(dtype);
 
       // starting address in A
-      dtype* d_A_offset = m_device_data + (js * this->m_size1 + is);
+      dtype* d_A_offset = (dtype*)this->m_device_data + (js * this->m_size1 + is);
 
       const dtype* pb = (const dtype*)other.device_data();
       dtype* d_b = const_cast<dtype*>(pb);

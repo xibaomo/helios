@@ -81,7 +81,7 @@ void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
   XMux<ComplexMatrix> X(b.getSize(), 1);
   linsolve_mat_gpu(A, B, X);
 
-  Complex* d_X = X.device_data();
+  void* d_X = X.device_data();
   if (!x.device_data()) {
     Complex* d_x;
     CUDA_CHECK(cudaMalloc(&d_x, sizeof(cuComplex) * b.getSize()));

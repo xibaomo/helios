@@ -3,6 +3,32 @@
 #include "culinear.h"
 #include "xmux.h"
 
+XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x, size_t max_order_y,
+        Real theta, Real phi, Complex& in_eps)
+    : m_lambda(lambda), m_theta(theta), m_phi(phi), m_eps_in(in_eps) {
+  m_maxOrderXY[0] = max_order_x;
+  m_maxOrderXY[1] = max_order_y;
+  m_Lx = Lx;
+  m_Ly = Ly;
+
+  m_orderX.resize(2 * max_order_x + 1);
+  m_orderY.resize(2 * max_order_y + 1);
+  for (size_t i = 0; i < max_order_x; i++) {
+    m_orderX[i] = -max_order_x + i;
+  }
+  for (size_t i = 0; i < max_order_y; i++) {
+    m_orderY[i] = -max_order_y + i;
+  }
+  m_orderN = (2 * m_maxOrderXY[0] + 1) * (2 * m_maxOrderXY[1] + 1);
+  std::cout << "Total count of harmonics: " << m_orderN << std::endl;
+
+  m_k0 = 2.f * Pi / m_lambda;
+  m_kx_inc_norm = std::sin(theta) * std::cos(phi) * std::sqrt(in_eps);
+  m_ky_inc_norm = std::sin(theta) * std::sin(phi) * std::sqrt(in_eps);
+
+  createKMatrices();
+}
+
 void XRcwa2D::createKMatrices() {
   // generate k grids (-N,-N), (-N, -N+1) ... (0,0), (0,1) ... (N,N)
   m_kgrids.resize(m_orderN);
@@ -83,7 +109,8 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
 
   ComplexMatrix Kz(m_orderN, m_orderN);
   for (size_t i = 0; i < m_orderN; i++) {
-    auto tmp = std::conj(eps) - m_Kx_norm[i][i]*m_Kx_norm[i][i] - m_Ky_norm[i][i]*m_Ky_norm[i][i];
+    auto tmp = std::conj(eps) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+               m_Ky_norm[i][i] * m_Ky_norm[i][i];
     Kz[i][i] = std::conj(std::sqrt(tmp));
   }
 
@@ -101,13 +128,13 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
   // fill Q
   for (size_t i = 0; i < m_orderN; i++) {
     // diagonal blocks
-    Q[i][i] = m_Kx_norm[i][i]*m_Ky_norm[i][i];
-    Q[i + m_orderN][i + m_orderN] = -m_Kx_norm[i][i]*m_Ky_norm[i][i];
+    Q[i][i] = m_Kx_norm[i][i] * m_Ky_norm[i][i];
+    Q[i + m_orderN][i + m_orderN] = -m_Kx_norm[i][i] * m_Ky_norm[i][i];
 
     // UR block
-    Q[i][i + m_orderN] = eps - m_Kx_norm[i][i]*m_Kx_norm[i][i];
+    Q[i][i + m_orderN] = eps - m_Kx_norm[i][i] * m_Kx_norm[i][i];
     // LL block
-    Q[i + m_orderN][i] = m_Ky_norm[i][i]*m_Ky_norm[i][i] - eps;
+    Q[i + m_orderN][i] = m_Ky_norm[i][i] * m_Ky_norm[i][i] - eps;
   }
 
   auto xV = wrap_xmux(V);
@@ -126,10 +153,16 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
   m_scatterMatrices.emplace_back(std::move(sm));
 }
 
-ComplexMatrix XRcwa2D::createEpsilonMatrix(const Array2D<Complex>& eps_space) {
-    ComplexMatrix eps_mat(m_orderN,m_orderN);
+ComplexMatrix XRcwa2D::createConvMat(const Array2D<Complex>& eps_img, int max_order) {
+  size_t nx = eps_img.getSize1();
+  size_t ny = eps_img.getSize2();
+  ComplexMatrix F_eps_raw = eps_img;
+  auto mx_F_eps = wrap_xmux(F_eps_raw);
+  fft2d(mx_F_eps);
+  mx_F_eps.scale(1.f/(nx*ny));
+  ComplexMatrix eps_mat(m_orderN, m_orderN);
 
-    return eps_mat;
+  return eps_mat;
 }
 
 void XRcwa2D::addPatternLayer(const Array2D<Complex>& eps, Real thickness) {}

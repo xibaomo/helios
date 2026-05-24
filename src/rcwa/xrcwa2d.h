@@ -42,30 +42,7 @@ class XRcwa2D {
 
  public:
   XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x, size_t max_order_y,
-          Real theta, Real phi, Complex& in_eps)
-      : m_lambda(lambda), m_theta(theta), m_phi(phi), m_eps_in(in_eps) {
-    m_maxOrderXY[0] = max_order_x;
-    m_maxOrderXY[1] = max_order_y;
-    m_Lx = Lx;
-    m_Ly = Ly;
-
-    m_orderX.resize(2 * max_order_x + 1);
-    m_orderY.resize(2 * max_order_y + 1);
-    for (size_t i = 0; i < max_order_x; i++) {
-      m_orderX[i] = -max_order_x + i;
-    }
-    for (size_t i = 0; i < max_order_y; i++) {
-      m_orderY[i] = -max_order_y + i;
-    }
-    m_orderN = (2 * m_maxOrderXY[0] + 1) * (2 * m_maxOrderXY[1] + 1);
-    std::cout << "Total count of harmonics: " << m_orderN << std::endl;
-
-    m_k0 = 2.f * Pi / m_lambda;
-    m_kx_inc_norm = std::sin(theta) * std::cos(phi) * std::sqrt(in_eps);
-    m_ky_inc_norm = std::sin(theta) * std::sin(phi) * std::sqrt(in_eps);
-
-    createKMatrices();
-  }
+          Real theta, Real phi, Complex& in_eps);
 
   void addUniformLayer(const Complex& eps, Real thickness);
   void addPatternLayer(const Array2D<Complex>& eps, Real thickness);
@@ -74,7 +51,7 @@ class XRcwa2D {
 
   void createKMatrices();
   
-  ComplexMatrix createEpsilonMatrix(const Array2D<Complex>& eps);
+  ComplexMatrix createConvMat(const Array2D<Complex>& eps_img, int max_order);
 
   SMat createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
                        const ComplexMatrix& Lambda, Real thickness);
