@@ -70,11 +70,30 @@ using OptionalDim =
     std::conditional_t<std::is_base_of_v<Array2D<typename T::dtype>, T>, Dim2D,
                        Empty>;
 
+template <typename T>
+struct DeviceTypeTraits;
+template <>
+struct DeviceTypeTraits<float> {
+  using type = float;
+};
+template <>
+struct DeviceTypeTraits<double> {
+  using type = double;
+};
+template <>
+struct DeviceTypeTraits<std::complex<float>> {
+  using type = cuComplex;
+};
+template <>
+struct DeviceTypeTraits<std::complex<double>> {
+  using type = cuDoubleComplex;
+};
 template <typename Arr>
 class XMux : public OptionalDim<Arr> {
  public:
   enum class Device { __cpu__, __gpu__ };
   using dtype = typename Arr::dtype;
+  using dev_dtype = typename DeviceTypeTraits<dtype>::type;
 
  private:
   std::unique_ptr<Arr> m_own_cpu;
@@ -317,6 +336,8 @@ class XMux : public OptionalDim<Arr> {
     }
   }
 
+  void eye();
+
   // fill 'other' to sub block [is:is+other.s1,js:js+other.s2]
   void fillBlock(size_t is, size_t js, const XMux<Arr>& other) {
     if constexpr (XMux::is_2D::value) {
@@ -325,7 +346,8 @@ class XMux : public OptionalDim<Arr> {
       size_t dpitch = this->m_size1 * sizeof(dtype);
 
       // starting address in A
-      dtype* d_A_offset = (dtype*)this->m_device_data + (js * this->m_size1 + is);
+      dtype* d_A_offset =
+          (dtype*)this->m_device_data + (js * this->m_size1 + is);
 
       const dtype* pb = (const dtype*)other.device_data();
       dtype* d_b = const_cast<dtype*>(pb);
@@ -341,14 +363,14 @@ class XMux : public OptionalDim<Arr> {
   void touchCPU() { m_dev = Device::__cpu__; }
 
   void add(const XMux<Arr>& other);
-  void sub(const XMux<Arr>& other);
+  void substract(const XMux<Arr>& other);
 
-  void scale(Real s); //each * s;
+  void scale(Real s);  // each * s;
 
   void ones();
 
-//   template <typename F, typename... OtherArrs>
-//   void for_each(F fn, XMux<OtherArrs>&... others);
+  //   template <typename F, typename... OtherArrs>
+  //   void for_each(F fn, XMux<OtherArrs>&... others);
 };
 
 template class XMux<ComplexMatrix>;

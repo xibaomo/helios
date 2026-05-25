@@ -7,13 +7,15 @@
 struct SMat {
   XMux<ComplexMatrix> s11;  // reflection
   XMux<ComplexMatrix> s12;  // transmission
-};
+  XMux<ComplexMatrix> s21;
+  XMux<ComplexMatrix> s22;
+};  // SMat of a layer is usually symmetric, but overall Smat is not.
 
 class XRcwa2D {
  private:
   Real m_lambda;
   int m_maxOrderXY[2];
-  Real m_Lx,m_Ly;
+  Real m_Lx, m_Ly;
   Real m_theta, m_phi;  // incident angles
 
   Array1D<int> m_orderX;
@@ -53,4 +55,6 @@ class XRcwa2D {
 
   SMat createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
                        const ComplexMatrix& Lambda, Real thickness);
+
+  SMat redheffer(SMat& a, SMat& b);
 };

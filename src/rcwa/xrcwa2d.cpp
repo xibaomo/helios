@@ -76,7 +76,7 @@ SMat XRcwa2D::createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
   XMux<ComplexMatrix> B2 = B1;
   linsolve_mat_gpu(xW, xW0, B1);
   linsolve_mat_gpu(xV, xV0, B2);
-  B1.sub(B2);
+  B1.substract(B2);
 
   // compute U = (A-XBA^-1XB)
   // compute K = A^-1 X
@@ -84,10 +84,10 @@ SMat XRcwa2D::createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
   XMux<ComplexMatrix> U = A1;
   linsolve_mat_gpu(A1, xX, K);
   XMux<ComplexMatrix> U1 = xX * B1 * K * B1;
-  U.sub(U1);
+  U.substract(U1);
   // compute G=XBA^-1XA-B
   XMux<ComplexMatrix> G = xX * B1 * K * A1;
-  G.sub(B1);
+  G.substract(B1);
 
   SMat sm;
   linsolve_mat_gpu(U, G, sm.s11);
@@ -96,7 +96,7 @@ SMat XRcwa2D::createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
   linsolve_mat_gpu(A1, B1, C);  // C=A^-1 B
   C = B1 * C;
   XMux<ComplexMatrix> C1 = A1;
-  C1.sub(C);
+  C1.substract(C);
 
   XMux<ComplexMatrix> C2;
   linsolve_mat_gpu(U, xX, C2);
@@ -155,3 +155,27 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
 }
 
 void XRcwa2D::addPatternLayer(const Array2D<Complex>& eps, Real thickness) {}
+
+SMat 
+XRcwa2D::redheffer(SMat& a, SMat& b){
+  SMat res;
+  XMux<ComplexMatrix> I0 = a.s11;
+  I0.eye(); 
+
+  XMux<ComplexMatrix> D = I0;
+  XMux<ComplexMatrix> F = I0; 
+  D.substract(b.s11*a.s22); 
+  F.substract(a.s22*b.s11);
+  linsolve_right_inplace_gpu(a.s12,D);
+  linsolve_right_inplace_gpu(b.s21,F);
+  
+  res.s11 = a.s11;
+  res.s11.add(D*b.s11*a.s21);
+
+  res.s12 = D*b.s12;
+  res.s21 = F*a.s21;
+  res.s22 = b.s22;
+  res.s22.add(F*a.s22*b.s12);
+
+  return res;
+}
