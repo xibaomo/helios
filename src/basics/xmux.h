@@ -264,8 +264,8 @@ class XMux : public OptionalDim<Arr> {
       cudaStreamSynchronize(nullptr);
       if constexpr (XMux::is_2D::value) {
         if (this->m_size1 > 1 && this->m_size2 > 1 && is_transpose) {
-          transpose_gpu(this->m_size2, this->m_size1, m_device_data,
-                        m_device_data);
+          transpose_gpu(this->m_size2, this->m_size1, (dtype*)m_device_data,
+                        (dtype*)m_device_data);
         }
       }
       m_dev = Device::__cpu__;
@@ -301,8 +301,8 @@ class XMux : public OptionalDim<Arr> {
 
     if constexpr (XMux::is_2D::value) {
       if (this->m_size1 > 1 && this->m_size2 > 1 && is_transpose) {
-        transpose_gpu(this->m_size1, this->m_size2, m_device_data,
-                      m_device_data);
+        transpose_gpu(this->m_size1, this->m_size2, (dtype*)m_device_data,
+                      (dtype*)m_device_data);
       }
     }
     m_dev = Device::__gpu__;

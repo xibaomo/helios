@@ -2,8 +2,9 @@
 #include "cuhandlemgr.h"
 #include "culinear.h"
 #include "utest.h"
+#include "utils.h"
 #include "xmux.h"
-#define N 2
+#define N 4
 using namespace std;
 
 static bool test_transpose();
@@ -41,7 +42,6 @@ static ComplexVector createVector(size_t n,
   }
   return v;
 }
-
 template <typename T>
 static void show_arr(const T& arr) {
   const typename T::dtype* p = arr.getData();
@@ -49,6 +49,15 @@ static void show_arr(const T& arr) {
     cout << p[i] << " ";
   }
   cout << endl;
+}
+template <typename T>
+static void show_arr2d(const T& arr) {
+  for (size_t i = 0; i < arr.getSize1(); i++) {
+    for (size_t j = 0; j < arr.getSize2(); j++) {
+      cout << arr[i][j] << "\t";
+    }
+    cout << endl;
+  }
 }
 
 bool test_transpose() {
@@ -214,15 +223,17 @@ bool test_fft2d() {
   auto xa = wrap_xmux(a);
 
   cout << "A: " << endl;
-  show_arr(a);
+  show_arr2d(a);
   fft2d(xa);
+  fftshift(xa);
   xa.to_cpu();
   cout << "fft2d: " << endl;
-  show_arr(xa.cpu());
+  show_arr2d(xa.cpu());
 
+  ifftshift(xa);
   ifft2d(xa, 1.f / (N * N));
   cout << "ifft2d: " << endl;
-  show_arr(xa.cpu());
+  show_arr2d(xa.cpu());
 
   return true;
 }
