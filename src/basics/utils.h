@@ -8,3 +8,4 @@ inline bool isPower2(int n) {
 void fftshift(XMux<ComplexMatrix>& A);
 void ifftshift(XMux<ComplexMatrix>& A);
 
+ComplexMatrix computeConvMat(const ComplexMatrix& a, int max_order_x, int max_order_y);

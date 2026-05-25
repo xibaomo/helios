@@ -2,9 +2,10 @@
 
 #include "culinear.h"
 #include "xmux.h"
+#include "utils.h"
 
-XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x, size_t max_order_y,
-        Real theta, Real phi, Complex& in_eps)
+XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x,
+                 size_t max_order_y, Real theta, Real phi, Complex& in_eps)
     : m_lambda(lambda), m_theta(theta), m_phi(phi), m_eps_in(in_eps) {
   m_maxOrderXY[0] = max_order_x;
   m_maxOrderXY[1] = max_order_y;
@@ -151,18 +152,6 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
 
   SMat sm = createLayerSmat(W, V, Lambda, thickness);
   m_scatterMatrices.emplace_back(std::move(sm));
-}
-
-ComplexMatrix XRcwa2D::createConvMat(const Array2D<Complex>& eps_img, int max_order) {
-  size_t nx = eps_img.getSize1();
-  size_t ny = eps_img.getSize2();
-  ComplexMatrix F_eps_raw = eps_img;
-  auto mx_F_eps = wrap_xmux(F_eps_raw);
-  fft2d(mx_F_eps);
-  mx_F_eps.scale(1.f/(nx*ny));
-  ComplexMatrix eps_mat(m_orderN, m_orderN);
-
-  return eps_mat;
 }
 
 void XRcwa2D::addPatternLayer(const Array2D<Complex>& eps, Real thickness) {}

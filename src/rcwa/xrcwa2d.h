@@ -50,8 +50,6 @@ class XRcwa2D {
   void buildGlobalScatterMatrix();
 
   void createKMatrices();
-  
-  ComplexMatrix createConvMat(const Array2D<Complex>& eps_img, int max_order);
 
   SMat createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
                        const ComplexMatrix& Lambda, Real thickness);

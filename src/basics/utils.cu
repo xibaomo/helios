@@ -1,6 +1,6 @@
 #include <cassert>
-
 #include "utils.h"
+#include "culinear.h"
 __global__ void fftshift_2d_power2_kernel(const cuComplex* __restrict__ input,
                                           cuComplex* __restrict__ output,
                                           int width, int height) {
@@ -74,4 +74,41 @@ void ifftshift(XMux<ComplexMatrix>& A) {
                         cudaMemcpyDeviceToDevice));
   CUDA_CHECK(cudaFree(d_tmp));
   cudaDeviceSynchronize();
+}
+
+ComplexMatrix computeConvMat(const ComplexMatrix& eps_img,
+                                     int max_order_x, int max_order_y) {
+  size_t nx = eps_img.getSize1();
+  size_t ny = eps_img.getSize2();
+  ComplexMatrix F_eps = eps_img;
+  auto mx_F_eps = wrap_xmux(F_eps);
+  fft2d(mx_F_eps);
+  mx_F_eps.scale(1.f / (nx * ny));
+  fftshift(mx_F_eps);
+  mx_F_eps.to_cpu();
+
+  int kx_min = -nx/2;
+  int ky_min = -ny/2;
+
+  int orders_x = 2 * max_order_x + 1;
+  int orders_y = 2 * max_order_y + 1;
+  int total_orders = orders_x * orders_y;
+  ComplexMatrix conv_mat(total_orders, total_orders);
+  conv_mat.zero();
+  for (size_t i = 0; i < total_orders; i++) {
+    int kx_out = i / orders_y;
+    int ky_out = i % orders_y;
+    for (size_t j = 0; j < total_orders; j++) {
+      int kx_in = j / orders_y;
+      int ky_in = j % orders_y;
+
+      int idx_kx = (kx_out - kx_in) - kx_min;
+      int idx_ky = (ky_out - ky_in) - ky_min;
+
+      conv_mat[i][j] = F_eps[idx_kx][idx_ky];
+
+    }
+  }
+
+  return conv_mat;
 }
