@@ -1,8 +1,8 @@
 #include "xrcwa2d.h"
 
 #include "culinear.h"
-#include "xmux.h"
 #include "utils.h"
+#include "xmux.h"
 
 XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x,
                  size_t max_order_y, Real theta, Real phi, Complex& in_eps)
@@ -156,26 +156,27 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
 
 void XRcwa2D::addPatternLayer(const Array2D<Complex>& eps, Real thickness) {}
 
-SMat 
-XRcwa2D::redheffer(SMat& a, SMat& b){
+SMat XRcwa2D::redheffer(SMat& a, SMat& b) {
   SMat res;
   XMux<ComplexMatrix> I0 = a.s11;
-  I0.eye(); 
+  I0.eye();
 
   XMux<ComplexMatrix> D = I0;
-  XMux<ComplexMatrix> F = I0; 
-  D.substract(b.s11*a.s22); 
-  F.substract(a.s22*b.s11);
-  linsolve_right_inplace_gpu(a.s12,D);
-  linsolve_right_inplace_gpu(b.s21,F);
-  
-  res.s11 = a.s11;
-  res.s11.add(D*b.s11*a.s21);
+  XMux<ComplexMatrix> F = I0;
+  D.substract(b.s11 * a.s22);
+  F.substract(a.s22 * b.s11);
+  linsolve_right_inplace_gpu(D, a.s12);
+  linsolve_right_inplace_gpu(F, b.s21);
+  D = a.s12;
+  F = b.s21;
 
-  res.s12 = D*b.s12;
-  res.s21 = F*a.s21;
+  res.s11 = a.s11;
+  res.s11.add(D * b.s11 * a.s21);
+
+  res.s12 = D * b.s12;
+  res.s21 = F * a.s21;
   res.s22 = b.s22;
-  res.s22.add(F*a.s22*b.s12);
+  res.s22.add(F * a.s22 * b.s12);
 
   return res;
 }
