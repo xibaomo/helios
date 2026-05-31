@@ -9,6 +9,13 @@ struct SMat {
   XMux<ComplexMatrix> s12;  // transmission
   XMux<ComplexMatrix> s21;
   XMux<ComplexMatrix> s22;
+
+  void resize(size_t s1, size_t s2) {
+    s11.resize(s1,s2); s11.zero();
+    s12.resize(s1,s2); s12.zero();
+    s21.resize(s1,s2); s21.zero();
+    s22.resize(s1,s2); s22.zero();
+  }
 };  // SMat of a layer is usually symmetric, but overall Smat is not.
 
 class XRcwa2D {
@@ -22,8 +29,8 @@ class XRcwa2D {
   Array1D<int> m_orderY;
   size_t m_orderN;  // total count of harmonics
 
-  Complex m_eps_in = 1.f;   // in layer epsilon
-  Complex m_eps_out = 1.f;  // out layer epsilon
+  Complex m_eps_ref = 1.f;   // in layer epsilon
+  Complex m_eps_trn = 1.f;  // out layer epsilon
 
   std::vector<SMat> m_scatterMatrices;  // store s-matrices of all layers
   std::vector<Real> m_thicknessList;
@@ -33,14 +40,20 @@ class XRcwa2D {
   Complex m_k0 = -1;
 
   // vacuum eigen vectors
-  ComplexMatrix m_W0;
-  ComplexMatrix m_V0;
+  XMux<ComplexMatrix> m_xW0;
+  XMux<ComplexMatrix> m_xV0;
 
   // k-matrix
   ComplexMatrix m_Kx_norm;  // kx_inc - m*2pi/Lx, in unit of k0
   ComplexMatrix m_Ky_norm;  // ky_inc - n*2pi/Ly, in unit of k0
+  ComplexMatrix m_Kz_norm_ref;
+  ComplexMatrix m_Kz_norm_trn;
+  ComplexMatrix m_Kz0_norm; //vacuum Kz
   typedef std::pair<int, int> KVector;
   std::vector<KVector> m_kgrids;
+
+  //global S matrix
+  SMat m_global_smat;
 
  public:
   XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x, size_t max_order_y,
@@ -49,9 +62,15 @@ class XRcwa2D {
   void addUniformLayer(const Complex& eps, Real thickness);
   void addPatternLayer(const Array2D<Complex>& eps, Real thickness);
 
-  void buildGlobalScatterMatrix();
+  void buildSMat_reflection();
+  void buildSMat_transmission();
+  void buildGlobalSMat();
+  
+  void setReflectionRegionEpsilon(Complex& eps) { m_eps_ref = eps;}
+  void setTransmissionRegionEpsilon(Complex& eps) { m_eps_trn = eps;}
 
   void createKMatrices();
+  void prepareVacuum();
 
   SMat createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
                        const ComplexMatrix& Lambda, Real thickness);
