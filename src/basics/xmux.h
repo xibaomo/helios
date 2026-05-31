@@ -229,32 +229,35 @@ class XMux : public OptionalDim<Arr> {
     return false;
   }
 
-  //   void resize(size_t rows, size_t cols) {
-  //     m_size = rows * cols;
-  //     size_t old_size = m_size;
-  //     if constexpr (XMux::is_2D::value) {
-  //       this->m_size1 = rows;
-  //       this->m_size2 = cols;
-  //     }
-  //     m_size = rows * cols;
-  //     if (m_size == 0) {
-  //       m_own_cpu.reset();
-  //       return;
-  //     }
-  //     if (m_dev == Device::__cpu__) {
-  //       if constexpr (XMux::is_2D::value) {
-  //         m_cpu->resize(this->m_size1, this->m_size2);
-  //       } else {
-  //         m_cpu->resize(this->m_size);
-  //       }
-  //     }
-  //     if (m_dev == Device::__gpu__) {
-  //       if (old_size != m_size) {
-  //         CUDA_CHECK(cudaFree(m_device_data));
-  //       }
-  //       CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
-  //     }
-  //   }
+  void resize(size_t rows, size_t cols) {
+    m_size = rows * cols;
+    size_t old_size = m_size;
+    if constexpr (XMux::is_2D::value) {
+      this->m_size1 = rows;
+      this->m_size2 = cols;
+    }
+    m_size = rows * cols;
+    if (m_size == 0) {
+      m_own_cpu.reset();
+      return;
+    }
+    if (m_dev == Device::__cpu__) {
+      std::cerr << "XMux is designed to operate on gpu memory. Please resize "
+                   "via cpu array"
+                << std::endl;
+      // if constexpr (XMux::is_2D::value) {
+      //   m_cpu->resize(this->m_size1, this->m_size2);
+      // } else {
+      //   m_cpu->resize(this->m_size);
+      // }
+    }
+    if (m_dev == Device::__gpu__) {
+      if (old_size != m_size) {
+        CUDA_CHECK(cudaFree(m_device_data));
+      }
+      CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
+    }
+  }
 
   size_t getSize1() const {
     if constexpr (XMux::is_2D::value) {
@@ -327,7 +330,7 @@ class XMux : public OptionalDim<Arr> {
     m_dev = Device::__gpu__;
   }
 
-  void setZero() {
+  void zero() {
     if (m_dev == Device::__cpu__) {
       m_cpu->zero();
     }
@@ -366,6 +369,7 @@ class XMux : public OptionalDim<Arr> {
   void substract(const XMux<Arr>& other);
 
   void scale(Real s);  // each * s;
+  void scale(Complex s);
 
   void ones();
 

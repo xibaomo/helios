@@ -100,6 +100,28 @@ void XMux<Arr>::scale(Real s) {
 }
 
 template <typename Arr>
+void XMux<Arr>::scale(Complex s) {
+  static_assert(!std::is_same_v<typename Arr::dtype, float>, "Real matrix cannot be scaled by complex");
+  if (m_dev == Device::__cpu__) {
+    std::cerr << "scale on cpu not supported" << std::endl;
+  }
+  // using T = typename Arr::dtype;
+  cuComplex g_s = make_cuComplex(s.real(),s.imag());
+
+  auto op = [g_s] __device__(auto& a) {
+    using T = std::decay_t<decltype(a)>;
+    if constexpr (std::is_same_v<T, cuComplex>) {
+      cuComplex f = cuCmulf(a,g_s);
+      return f;
+    } 
+  };
+
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+                                          (int)m_size);
+  cudaDeviceSynchronize();
+}
+
+template <typename Arr>
 void XMux<Arr>::ones() {
   auto op = [] __device__(cuComplex a) { return make_cuComplex(1.f, 0.f); };
 
