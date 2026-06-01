@@ -116,7 +116,7 @@ class XMux : public OptionalDim<Arr> {
   XMux(size_t s1 = 0, size_t s2 = 0)
       : m_own_cpu(std::make_unique<Arr>()),
         m_cpu(m_own_cpu.get()),
-        m_dev(Device::__gpu__) {
+        m_dev(Device::__gpu__), m_size(0), m_device_data(nullptr) {
     if constexpr (XMux::is_2D::value) {
       if (s1 > 0 && s2 == 0) s2 = 1;
       this->m_size1 = s1;
@@ -125,15 +125,17 @@ class XMux : public OptionalDim<Arr> {
     } else {
       m_size = s1;
     }
-    CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
+    if (m_size > 0)
+      CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
   }
-  XMux(const Arr& arr) : m_cpu(const_cast<Arr*>(&arr)) {
+  explicit XMux(const Arr& arr) : m_cpu(const_cast<Arr*>(&arr)) {
     m_dev = Device::__cpu__;
     m_size = arr.getSize();
     if constexpr (XMux::is_2D::value) {
       this->m_size1 = arr.getSize1();
       this->m_size2 = arr.getSize2();
     }
+    to_gpu();
   }
 
   XMux(const XMux& other)
@@ -181,7 +183,7 @@ class XMux : public OptionalDim<Arr> {
       }
       if (other.m_dev == Device::__gpu__) {
         CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
-        CUDA_CHECK(cudaMemcpy(&m_device_data, other.m_device_data,
+        CUDA_CHECK(cudaMemcpy(m_device_data, other.m_device_data,
                               sizeof(dtype) * m_size,
                               cudaMemcpyDeviceToDevice));
       }
@@ -252,7 +254,7 @@ class XMux : public OptionalDim<Arr> {
       // }
     }
     if (m_dev == Device::__gpu__) {
-      if (old_size != m_size) {
+      if (old_size != m_size && m_device_data) {
         CUDA_CHECK(cudaFree(m_device_data));
       }
       CUDA_CHECK(cudaMalloc(&m_device_data, sizeof(dtype) * m_size));
@@ -352,11 +354,11 @@ class XMux : public OptionalDim<Arr> {
       dtype* d_A_offset =
           (dtype*)this->m_device_data + (js * this->m_size1 + is);
 
-      const dtype* pb = (const dtype*)other.device_data();
-      dtype* d_b = const_cast<dtype*>(pb);
+      const void* d_b = other.device_data();
 
-      CUDA_CHECK(cudaMemcpy2D(d_A_offset, dpitch, (dtype*)d_b, spitch,
-                              width_bytes, other.getSize2(),
+      CUDA_CHECK(cudaMemcpy2D(d_A_offset, dpitch, d_b, spitch,
+                              // width_bytes, other.getSize2(),
+                              width_bytes,other.getSize2(),
                               cudaMemcpyDeviceToDevice));
       cudaDeviceSynchronize();
     }

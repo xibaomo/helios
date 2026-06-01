@@ -40,17 +40,20 @@ XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x,
 void XRcwa2D::prepareVacuum() {
   auto xKx = wrap_xmux(m_Kx_norm);
   auto xKy = wrap_xmux(m_Ky_norm);
-  XMux<ComplexMatrix> I0 = m_Kx_norm;
+  XMux<ComplexMatrix> I0 = xKx;
   I0.eye();
   m_xW0.resize(m_orderN * 2, m_orderN * 2);
   m_xW0.eye();
   XMux<ComplexMatrix> lam0(m_orderN * 2, m_orderN * 2);
   lam0.zero();
-  XMux<ComplexMatrix> tmp = m_Kz0_norm;
+  // XMux<ComplexMatrix> tmp = m_Kz0_norm;
+  auto tmp = wrap_xmux(m_Kz0_norm);
+  tmp.to_gpu();
   tmp.scale(Complex{0.f, 1.f});
   lam0.fillBlock(0, 0, tmp);
   lam0.fillBlock(m_orderN, m_orderN, tmp);
   XMux<ComplexMatrix> Q0;
+  Q0.resize(m_orderN*2,m_orderN*2);
   Q0.fillBlock(0, 0, xKx * xKy);
   auto Q12 = xKx;
   Q12.eye();
@@ -82,6 +85,9 @@ void XRcwa2D::createKMatrices() {
   m_Kx_norm.resize(m_orderN, m_orderN);
   m_Kx_norm.zero();
   m_Ky_norm = m_Kx_norm;
+  m_Kz_norm_ref = m_Kx_norm;
+  m_Kz_norm_trn = m_Kx_norm;
+  m_Kz0_norm = m_Kx_norm;
 
   for (size_t i = 0; i < m_orderN; i++) {
     m_Kx_norm[i][i] = m_kx_inc_norm - m_kgrids[i].first * m_lambda / m_Lx;
@@ -238,7 +244,8 @@ void XRcwa2D::buildSMat_reflection() {
   // [S11,S12,S21,S22]=redheffer(Sr_11,Sr_12,Sr_21,Sr_22,S11,S12,S21,S22);
 
   XMux<ComplexMatrix> Lam_ref = Qref;
-  XMux<ComplexMatrix> tmp = m_Kz_norm_ref;
+  // XMux<ComplexMatrix> tmp = m_Kz_norm_ref;
+  auto tmp = wrap_xmux(m_Kz_norm_ref);
   tmp.scale(Complex{0.f, -1.f});
   Lam_ref.fillBlock(0, 0, tmp);
   Lam_ref.fillBlock(m_orderN, m_orderN, tmp);
@@ -305,7 +312,8 @@ void XRcwa2D::buildSMat_transmission() {
 
   XMux<ComplexMatrix> Lam_trn = Qtrn;
   Lam_trn.zero();
-  XMux<ComplexMatrix> tmp = m_Kz_norm_trn;
+  // XMux<ComplexMatrix> tmp = m_Kz_norm_trn;
+  auto tmp = wrap_xmux(m_Kz_norm_trn);
   tmp.scale(Complex{0.f, 1.f});
   Lam_trn.fillBlock(0, 0, tmp);
   Lam_trn.fillBlock(m_orderN, m_orderN, tmp);

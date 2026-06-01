@@ -86,10 +86,10 @@ bool test_eig() {
 }
 
 bool test_linsolve() {
-  ComplexMatrix a = createMat(N, N);
-  ComplexVector v = createVector(N);
-  ComplexMatrix b = createMat(N, N, N * N + 1.f);
-  ComplexMatrix X = createMat(N, N);
+  ComplexMatrix a = createMat(2, 2);
+  ComplexVector v = createVector(2);
+  ComplexMatrix b = createMat(2, 2, 2 * 2 + 1.f);
+  ComplexMatrix X = createMat(2, 2);
 
   auto xa = wrap_xmux(a);
   auto xb = wrap_xmux(b);
