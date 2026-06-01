@@ -24,7 +24,7 @@ XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x,
   std::cout << "Total count of harmonics: " << m_orderN << std::endl;
 
   m_k0 = 2.f * PI / m_lambda;
-  m_kx_inc_norm = std::sin(theta) * std::cos(phi) * std::sqrt(in_eps);
+  m_kx_inc_norm = -std::sin(theta) * std::cos(phi) * std::sqrt(in_eps);
   m_ky_inc_norm = std::sin(theta) * std::sin(phi) * std::sqrt(in_eps);
 
   createKMatrices();
@@ -76,8 +76,8 @@ void XRcwa2D::createKMatrices() {
   // generate k grids (-N,-N), (-N, -N+1) ... (0,0), (0,1) ... (N,N)
   m_kgrids.resize(m_orderN);
   size_t k = 0;
-  for (size_t i = -m_maxOrderXY[0]; i <= m_maxOrderXY[0]; i++) {
-    for (size_t j = -m_maxOrderXY[1]; j <= m_maxOrderXY[1]; j++) {
+  for (int i = -m_maxOrderXY[0]; i <= m_maxOrderXY[0]; i++) {
+    for (int j = -m_maxOrderXY[1]; j <= m_maxOrderXY[1]; j++) {
       m_kgrids[k++] = {i, j};
     }
   }
