@@ -23,7 +23,7 @@ XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x,
   m_orderN = (2 * m_maxOrderXY[0] + 1) * (2 * m_maxOrderXY[1] + 1);
   std::cout << "Total count of harmonics: " << m_orderN << std::endl;
 
-  m_k0 = 2.f * Pi / m_lambda;
+  m_k0 = 2.f * PI / m_lambda;
   m_kx_inc_norm = std::sin(theta) * std::cos(phi) * std::sqrt(in_eps);
   m_ky_inc_norm = std::sin(theta) * std::sin(phi) * std::sqrt(in_eps);
 
@@ -369,4 +369,34 @@ SMat XRcwa2D::redheffer(SMat& a, SMat& b) {
   res.s22.add(F * a.s22 * b.s12);
 
   return res;
+}
+
+void XRcwa2D::setSourcePolarization(int pol) {
+  m_src.resize(m_orderN * 2);m_src.zero();
+  int mid = m_orderN / 2;
+  Real px, py;
+  if (pol == 0) {
+    // TE polarization
+    px = -sin(m_phi);
+    py = -cos(m_phi);
+  } else if (pol == 1) {
+    //TM
+    Real cs = cos(m_theta);
+    px = -cs * cos(m_phi);
+    py = cs * sin(m_phi);
+  } else {
+    ;
+  }
+  m_src[mid] = px;
+  m_src[mid + m_orderN] = py;
+}
+
+ComplexVector XRcwa2D::getReflection() {
+  auto ref = m_global_smat.s11 * wrap_xmux(m_src);
+  return ref.cpu();
+}
+
+ComplexVector XRcwa2D::getTransmission() {
+  auto trn = m_global_smat.s21 * wrap_xmux(m_src);
+  return trn.cpu();
 }

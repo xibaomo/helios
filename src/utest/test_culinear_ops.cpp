@@ -44,23 +44,6 @@ static ComplexVector createVector(size_t n,
   }
   return v;
 }
-template <typename T>
-static void show_arr(const T& arr) {
-  const typename T::dtype* p = arr.getData();
-  for (size_t i = 0; i < arr.getSize(); i++) {
-    cout << p[i] << " ";
-  }
-  cout << endl;
-}
-template <typename T>
-static void show_arr2d(const T& arr) {
-  for (size_t i = 0; i < arr.getSize1(); i++) {
-    for (size_t j = 0; j < arr.getSize2(); j++) {
-      cout << arr[i][j] << "\t";
-    }
-    cout << endl;
-  }
-}
 
 bool test_transpose() {
   ComplexMatrix a(2, 3);

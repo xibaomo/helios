@@ -55,6 +55,9 @@ class XRcwa2D {
   //global S matrix
   SMat m_global_smat;
 
+  //src array, amplitudes of diffraction orders of Ex,Ey
+  ComplexVector m_src;
+
  public:
   XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x, size_t max_order_y,
           Real theta, Real phi, Complex& in_eps);
@@ -76,4 +79,9 @@ class XRcwa2D {
                        const ComplexMatrix& Lambda, Real thickness);
 
   SMat redheffer(SMat& a, SMat& b);
+
+  void setSourcePolarization(int pol = 0); //0: TE, 1: TM
+
+  ComplexVector getReflection();
+  ComplexVector getTransmission();
 };

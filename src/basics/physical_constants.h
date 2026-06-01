@@ -1,5 +1,5 @@
 #pragma once
-#define Pi 3.141592652589793
+#define PI 3.141592652589793
 namespace Physics {
     inline constexpr double c0 = 299792458.0;          // m/s
     inline constexpr double mu0 = 1.25663706e-6;      // N/A^2 

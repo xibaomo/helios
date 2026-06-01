@@ -12,7 +12,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
 set(CUDA_DIR /usr/local/cuda-12.9)
 include_directories(${CUDA_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/basics)
-
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_subdirectory(src)
 
 install(TARGETS helios
