@@ -163,16 +163,22 @@ void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B) {
 
 void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
                                 XMux<ComplexMatrix>& B) {
-  A.to_gpu(false);
-  B.to_gpu(false);
+  A.to_gpu();
+  B.to_gpu();
+  // after this line, data is on gpu, column major
+  void* d_AT;
+  void* d_BT;
+  CUDA_CHECK(cudaMalloc(&d_AT, sizeof(cuComplex) * A.getSize()));
+  CUDA_CHECK(cudaMalloc(&d_BT, sizeof(cuComplex) * B.getSize()));
+  transpose_gpu(A.getSize1(), A.getSize2(), (Complex*)A.device_data(), (Complex*)d_AT);
+  transpose_gpu(B.getSize1(), B.getSize2(), (Complex*)B.device_data(), (Complex*)d_BT);
+  // solving XA=B amounts to solving A'X'=B'
   // solve A'X'=B'
   auto& handle = CuHandleMgr::getInstance().getCuSolverHandle();
   cusolverDnParams_t params = nullptr;
 
   CUSOLVER_CHECK(cusolverDnCreateParams(&params));
 
-  void* d_A = A.device_data();
-  void* d_B = B.device_data();
   int n = A.getSize1();
   int m = B.getSize1();
 
@@ -185,14 +191,14 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
   size_t d_lwork = 0;
   size_t h_lwork = 0;
   CUSOLVER_CHECK(cusolverDnXgetrf_bufferSize(handle, params, n, n, CUDA_C_32F,
-                                             d_A, n, CUDA_C_32F, &d_lwork,
+                                             d_AT, n, CUDA_C_32F, &d_lwork,
                                              &h_lwork));
   void* d_work = nullptr;
   void* h_work = nullptr;
   if (d_lwork > 0) CUDA_CHECK(cudaMalloc(&d_work, d_lwork));
   if (h_lwork > 0) h_work = std::malloc(h_lwork);
 
-  CUSOLVER_CHECK(cusolverDnXgetrf(handle, params, n, n, CUDA_C_32F, d_A, n,
+  CUSOLVER_CHECK(cusolverDnXgetrf(handle, params, n, n, CUDA_C_32F, d_AT, n,
                                   d_ipiv, CUDA_C_32F, d_work, d_lwork, h_work,
                                   h_lwork, d_info));
 
@@ -204,9 +210,8 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
   }
 
   // solve XA=B
-  CUSOLVER_CHECK(cusolverDnXgetrs(
-      handle, params, CUBLAS_OP_N,  // no op since already transpose A and B
-      n, m, CUDA_C_32F, d_A, n, d_ipiv, CUDA_C_32F, d_B, n, d_info));
+  CUSOLVER_CHECK(cusolverDnXgetrs(handle, params, CUBLAS_OP_N, n, m, CUDA_C_32F,
+                                  d_AT, n, d_ipiv, CUDA_C_32F, d_BT, m, d_info));
 
   CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
   if (h_info) {
@@ -220,7 +225,7 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
   if (h_work) std::free(h_work);
   if (params) cusolverDnDestroyParams(params);
 
-  transpose_gpu(n, m, (cuComplex*)d_B, (cuComplex*)d_B);
+  transpose_gpu(n, m, (cuComplex*)d_BT, (cuComplex*)B.device_data());
 }
 
 void linsolve_right_gpu(const XMux<ComplexMatrix>& A,
@@ -284,18 +289,19 @@ XMux<ComplexMatrix> operator*(const XMux<ComplexMatrix>& A,
 void fft2d(XMux<ComplexMatrix>& xa) {
   xa.to_gpu();
 
-  auto& plan = CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(), xa.getSize2());
+  auto& plan =
+      CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(), xa.getSize2());
   cuComplex* d_a = (cuComplex*)xa.device_data();
 
   cufftExecC2C(plan, d_a, d_a, CUFFT_FORWARD);
-
 }
 
-void ifft2d(XMux<ComplexMatrix>& xa, Real s){
-    xa.to_gpu();
-    auto& plan = CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(),xa.getSize2());
-    cuComplex* d_a = (cuComplex*)xa.device_data();
-    cufftExecC2C(plan, d_a, d_a, CUFFT_INVERSE);
+void ifft2d(XMux<ComplexMatrix>& xa, Real s) {
+  xa.to_gpu();
+  auto& plan =
+      CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(), xa.getSize2());
+  cuComplex* d_a = (cuComplex*)xa.device_data();
+  cufftExecC2C(plan, d_a, d_a, CUFFT_INVERSE);
 
-    xa.scale(s);
+  xa.scale(s);
 }

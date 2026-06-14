@@ -1,4 +1,5 @@
 #include <cuComplex.h>
+
 #include <cassert>
 
 #include "xmux.h"
@@ -11,9 +12,9 @@ __global__ void ops_each_knl(Func f, T* d_A, int n, Args... others) {
     d_A[i] = f(d_A[i], others[i]...);
   }
 }
-template <typename T>
-__global__ void set_diagonal_grid_stride_kernel(T* __restrict__ matrix,
-                                                Real value, int cols) {
+template <typename T, typename U>
+__global__ void set_diagonal_grid_stride_kernel(T* __restrict__ matrix, U value,
+                                                int cols) {
   // 1. Calculate the unique global thread ID
   int start_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -23,15 +24,18 @@ __global__ void set_diagonal_grid_stride_kernel(T* __restrict__ matrix,
   // 3. Loop across the data jumping by 'stride' each iteration
   for (int idx = start_idx; idx < cols; idx += stride) {
     int diagonal_offset = idx * cols + idx;
-    if constexpr (std::is_same_v<T,cuComplex>)
-      matrix[diagonal_offset] = make_cuComplex(value,0.f);
-    if constexpr (std::is_same_v<T, float>)
+    if constexpr (std::is_same_v<T, cuComplex> && std::is_same_v<U, float>)
+      matrix[diagonal_offset] = make_cuComplex(value, 0.f);
+    if constexpr (std::is_same_v<T, float> && std::is_same_v<U, float>)
       matrix[diagonal_offset] = value;
+    if constexpr (std::is_same_v<T, cuComplex> && std::is_same_v<U, Complex>)
+      matrix[diagonal_offset] = make_cuComplex(value.real(), value.imag());
   }
 }
 
 template <typename Arr>
 void XMux<Arr>::eye() {
+  zero();
   if constexpr (XMux::is_2D::value) {
     assert(this->m_size1 == this->m_size2);
     if (m_dev == Device::__cpu__) {
@@ -39,7 +43,15 @@ void XMux<Arr>::eye() {
     }
     if (m_dev == Device::__gpu__) {
       set_diagonal_grid_stride_kernel<<<GRID_SIZE, BLOCK_SIZE>>>(
-          (dev_dtype*)this->m_device_data, 1.f, this->m_size2);
+          (dev_dtype*)this->m_device_data, (float)1.f, this->m_size2);
+    }
+    // ??????????
+    cudaDeviceSynchronize();
+
+    // ???????????????(????????)
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      printf("CUDA Kernel Launch Error: %s\n", cudaGetErrorString(err));
     }
   }
 }
@@ -79,7 +91,7 @@ void XMux<Arr>::substract(const XMux<Arr>& other) {
 template <typename Arr>
 void XMux<Arr>::scale(Real s) {
   if (m_dev == Device::__cpu__) {
-    std::cerr << "scale on cpu not supported" << std::endl;
+    std::cerr << "scale on cpu not supported. Real" << std::endl;
   }
   // using T = typename Arr::dtype;
 
@@ -101,19 +113,20 @@ void XMux<Arr>::scale(Real s) {
 
 template <typename Arr>
 void XMux<Arr>::scale(Complex s) {
-  static_assert(!std::is_same_v<typename Arr::dtype, float>, "Real matrix cannot be scaled by complex");
+  static_assert(!std::is_same_v<typename Arr::dtype, float>,
+                "Real matrix cannot be scaled by complex");
   if (m_dev == Device::__cpu__) {
-    std::cerr << "scale on cpu not supported" << std::endl;
+    std::cerr << "scale on cpu not supported. Complex" << std::endl;
   }
   // using T = typename Arr::dtype;
-  cuComplex g_s = make_cuComplex(s.real(),s.imag());
+  cuComplex g_s = make_cuComplex(s.real(), s.imag());
 
   auto op = [g_s] __device__(auto& a) {
     using T = std::decay_t<decltype(a)>;
     if constexpr (std::is_same_v<T, cuComplex>) {
-      cuComplex f = cuCmulf(a,g_s);
+      cuComplex f = cuCmulf(a, g_s);
       return f;
-    } 
+    }
   };
 
   ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,

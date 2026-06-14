@@ -40,6 +40,8 @@ XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x,
 void XRcwa2D::prepareVacuum() {
   auto xKx = wrap_xmux(m_Kx_norm);
   auto xKy = wrap_xmux(m_Ky_norm);
+  xKx.to_gpu();
+  xKy.to_gpu();
   XMux<ComplexMatrix> I0 = xKx;
   I0.eye();
   m_xW0.resize(m_orderN * 2, m_orderN * 2);
@@ -70,6 +72,9 @@ void XRcwa2D::prepareVacuum() {
   Q0.fillBlock(m_orderN, m_orderN, Q22);
 
   linsolve_right_gpu(lam0, Q0, m_xV0);
+
+  auto t = m_xV0 * lam0;
+  t.substract(Q0);
 }
 
 void XRcwa2D::createKMatrices() {
@@ -93,13 +98,14 @@ void XRcwa2D::createKMatrices() {
     m_Kx_norm[i][i] = m_kx_inc_norm - m_kgrids[i].first * m_lambda / m_Lx;
     m_Ky_norm[i][i] = m_ky_inc_norm - m_kgrids[i].second * m_lambda / m_Ly;
 
-    m_Kz_norm_ref[i][i] = -std::conj(
-        std::sqrt(std::conj(m_eps_ref) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+    m_Kz_norm_ref[i][i] = -Conj(
+        std::sqrt(Conj(m_eps_ref) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
                   m_Ky_norm[i][i] * m_Ky_norm[i][i]));
-    m_Kz_norm_trn[i][i] = std::conj(
-        std::sqrt(std::conj(m_eps_trn) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+    m_Kz_norm_trn[i][i] = Conj(
+        std::sqrt(Conj(m_eps_trn) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
                   m_Ky_norm[i][i] * m_Ky_norm[i][i]));
-    m_Kz0_norm[i][i] = std::conj(std::sqrt(Complex{1.f, 0.f} -
+ 
+    m_Kz0_norm[i][i] = Conj(std::sqrt(Complex{1.f, 0.f} -
                                            m_Kx_norm[i][i] * m_Kx_norm[i][i] -
                                            m_Ky_norm[i][i] * m_Ky_norm[i][i]));
   }
@@ -115,7 +121,7 @@ SMat XRcwa2D::createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
 
   auto xW = wrap_xmux(W);
   auto xV = wrap_xmux(V);
-  auto xL = wrap_xmux(Lambda);
+  // auto xL = wrap_xmux(Lambda);
   auto xX = wrap_xmux(X);
 
   XMux<ComplexMatrix> A1(W.getSize1(), W.getSize2());
@@ -155,6 +161,9 @@ SMat XRcwa2D::createLayerSmat(const ComplexMatrix& W, const ComplexMatrix& V,
   linsolve_mat_gpu(U, xX, C2);
   sm.s12 = C2 * C1;
 
+  sm.s21 = sm.s12;
+  sm.s22 = sm.s11;
+
   return sm;
 }
 
@@ -163,9 +172,9 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
 
   ComplexMatrix Kz(m_orderN, m_orderN);
   for (size_t i = 0; i < m_orderN; i++) {
-    auto tmp = std::conj(eps) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+    auto tmp = Conj(eps) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
                m_Ky_norm[i][i] * m_Ky_norm[i][i];
-    Kz[i][i] = std::conj(std::sqrt(tmp));
+    Kz[i][i] = Conj(std::sqrt(tmp));
   }
 
   ComplexMatrix W(m_orderN * 2, m_orderN * 2);
@@ -246,6 +255,7 @@ void XRcwa2D::buildSMat_reflection() {
   XMux<ComplexMatrix> Lam_ref = Qref;
   // XMux<ComplexMatrix> tmp = m_Kz_norm_ref;
   auto tmp = wrap_xmux(m_Kz_norm_ref);
+  tmp.to_gpu();
   tmp.scale(Complex{0.f, -1.f});
   Lam_ref.fillBlock(0, 0, tmp);
   Lam_ref.fillBlock(m_orderN, m_orderN, tmp);
@@ -314,6 +324,7 @@ void XRcwa2D::buildSMat_transmission() {
   Lam_trn.zero();
   // XMux<ComplexMatrix> tmp = m_Kz_norm_trn;
   auto tmp = wrap_xmux(m_Kz_norm_trn);
+  tmp.to_gpu();
   tmp.scale(Complex{0.f, 1.f});
   Lam_trn.fillBlock(0, 0, tmp);
   Lam_trn.fillBlock(m_orderN, m_orderN, tmp);
@@ -393,7 +404,7 @@ void XRcwa2D::setSourcePolarization(int pol) {
     px = -cs * cos(m_phi);
     py = cs * sin(m_phi);
   } else {
-    ;
+    std::cerr << "unrecognized polarization: " << pol << std::endl;
   }
   m_src[mid] = px;
   m_src[mid + m_orderN] = py;

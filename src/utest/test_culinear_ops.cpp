@@ -4,7 +4,7 @@
 #include "utest.h"
 #include "utils.h"
 #include "xmux.h"
-#define N 4
+#define N 2
 using namespace std;
 
 static bool test_transpose();

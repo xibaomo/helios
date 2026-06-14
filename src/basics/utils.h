@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include "xmux.h"
+#include "types.h"
 
 inline bool isPower2(int n) {
     return n > 0 && (n & (n-1)) == 0;
@@ -27,4 +28,14 @@ static void show_arr2d(const T& arr) {
     }
     std::cout << std::endl;
   }
+}
+
+inline Complex Conj(const Complex& z) {
+    Complex zz = z;
+    if (abs(zz.imag()) < std::numeric_limits<Real>::epsilon()) {
+        zz.imag(0.f);
+        return zz;
+    }
+
+    return std::conj(zz);
 }

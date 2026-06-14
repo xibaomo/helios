@@ -116,7 +116,9 @@ class XMux : public OptionalDim<Arr> {
   XMux(size_t s1 = 0, size_t s2 = 0)
       : m_own_cpu(std::make_unique<Arr>()),
         m_cpu(m_own_cpu.get()),
-        m_dev(Device::__gpu__), m_size(0), m_device_data(nullptr) {
+        m_dev(Device::__gpu__),
+        m_size(0),
+        m_device_data(nullptr) {
     if constexpr (XMux::is_2D::value) {
       if (s1 > 0 && s2 == 0) s2 = 1;
       this->m_size1 = s1;
@@ -135,7 +137,6 @@ class XMux : public OptionalDim<Arr> {
       this->m_size1 = arr.getSize1();
       this->m_size2 = arr.getSize2();
     }
-    to_gpu();
   }
 
   XMux(const XMux& other)
@@ -345,6 +346,7 @@ class XMux : public OptionalDim<Arr> {
 
   // fill 'other' to sub block [is:is+other.s1,js:js+other.s2]
   void fillBlock(size_t is, size_t js, const XMux<Arr>& other) {
+    to_gpu();
     if constexpr (XMux::is_2D::value) {
       size_t width_bytes = other.getSize1() * sizeof(dtype);
       size_t spitch = other.getSize1() * sizeof(dtype);
@@ -358,7 +360,7 @@ class XMux : public OptionalDim<Arr> {
 
       CUDA_CHECK(cudaMemcpy2D(d_A_offset, dpitch, d_b, spitch,
                               // width_bytes, other.getSize2(),
-                              width_bytes,other.getSize2(),
+                              width_bytes, other.getSize2(),
                               cudaMemcpyDeviceToDevice));
       cudaDeviceSynchronize();
     }
@@ -374,6 +376,13 @@ class XMux : public OptionalDim<Arr> {
   void scale(Complex s);
 
   void ones();
+
+  dtype sum() {
+    dtype s = 0.f;
+    to_cpu(true);
+    for (size_t i = 0; i < m_size; i++) s += m_cpu->getData()[i];
+    return s;
+  }
 
   //   template <typename F, typename... OtherArrs>
   //   void for_each(F fn, XMux<OtherArrs>&... others);
