@@ -11,10 +11,14 @@ struct SMat {
   XMux<ComplexMatrix> s22;
 
   void resize(size_t s1, size_t s2) {
-    s11.resize(s1,s2); s11.zero();
-    s12.resize(s1,s2); s12.zero();
-    s21.resize(s1,s2); s21.zero();
-    s22.resize(s1,s2); s22.zero();
+    s11.resize(s1, s2);
+    s11.zero();
+    s12.resize(s1, s2);
+    s12.zero();
+    s21.resize(s1, s2);
+    s21.zero();
+    s22.resize(s1, s2);
+    s22.zero();
   }
 };  // SMat of a layer is usually symmetric, but overall Smat is not.
 
@@ -29,7 +33,7 @@ class XRcwa2D {
   Array1D<int> m_orderY;
   size_t m_orderN;  // total count of harmonics
 
-  Complex m_eps_ref = 1.f;   // in layer epsilon
+  Complex m_eps_ref = 1.f;  // in layer epsilon
   Complex m_eps_trn = 1.f;  // out layer epsilon
 
   std::vector<SMat> m_scatterMatrices;  // store s-matrices of all layers
@@ -37,6 +41,7 @@ class XRcwa2D {
 
   Complex m_kx_inc_norm = -1;  // unit of k0
   Complex m_ky_inc_norm = -1;  // unit of k0
+  Complex m_kz_inc_norm = -1;
   Complex m_k0 = -1;
 
   // vacuum eigen vectors
@@ -48,15 +53,20 @@ class XRcwa2D {
   ComplexMatrix m_Ky_norm;  // ky_inc - n*2pi/Ly, in unit of k0
   ComplexMatrix m_Kz_norm_ref;
   ComplexMatrix m_Kz_norm_trn;
-  ComplexMatrix m_Kz0_norm; //vacuum Kz
+  ComplexMatrix m_Kz0_norm;  // vacuum Kz
   typedef std::pair<int, int> KVector;
   std::vector<KVector> m_kgrids;
 
-  //global S matrix
+  // global S matrix
   SMat m_global_smat;
 
-  //src array, amplitudes of diffraction orders of Ex,Ey
+  // src array, amplitudes of diffraction orders of Ex,Ey
   ComplexVector m_src;
+
+  XMux<ComplexVector> m_rxry;
+  XMux<ComplexVector> m_rz;  // reflection
+  XMux<ComplexVector> m_txty;
+  XMux<ComplexVector> m_tz;  // transmission
 
  public:
   XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x, size_t max_order_y,
@@ -68,9 +78,9 @@ class XRcwa2D {
   void buildSMat_reflection();
   void buildSMat_transmission();
   void buildGlobalSMat();
-  
-  void setReflectionRegionEpsilon(Complex& eps) { m_eps_ref = eps;}
-  void setTransmissionRegionEpsilon(Complex& eps) { m_eps_trn = eps;}
+
+  void setReflectionRegionEpsilon(Complex& eps) { m_eps_ref = eps; }
+  void setTransmissionRegionEpsilon(Complex& eps) { m_eps_trn = eps; }
 
   void createKMatrices();
   void prepareVacuum();
@@ -80,8 +90,20 @@ class XRcwa2D {
 
   SMat redheffer(SMat& a, SMat& b);
 
-  void setSourcePolarization(int pol = 0); //0: TE, 1: TM
+  void setSourcePolarization(int pol = 0);  // 0: TE, 1: TM
 
-  ComplexVector getReflection();
-  ComplexVector getTransmission();
+  ComplexVector getReflectionXY() { return m_rxry.cpu(); }
+  ComplexVector getReflectionX();
+  ComplexVector getReflectionY();
+  ComplexVector getReflectionZ() { return m_rz.cpu(); }
+  void evalReflectionZ();
+
+  ComplexVector getTransmissionXY() { return m_txty.cpu(); }
+  ComplexVector getTransmissionX();
+  ComplexVector getTransmissionY();
+  ComplexVector getTransmissionZ() { return m_tz.cpu(); }
+  void evalTransmissionZ();
+
+  Real getPowerReflection();
+  Real getPowerTransmission();
 };

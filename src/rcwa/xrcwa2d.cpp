@@ -26,6 +26,7 @@ XRcwa2D::XRcwa2D(Real lambda, Real Lx, Real Ly, size_t max_order_x,
   m_k0 = 2.f * PI / m_lambda;
   m_kx_inc_norm = -std::sin(theta) * std::cos(phi) * std::sqrt(in_eps);
   m_ky_inc_norm = std::sin(theta) * std::sin(phi) * std::sqrt(in_eps);
+  m_kz_inc_norm = std::cos(theta) * std::sqrt(in_eps);
 
   createKMatrices();
 
@@ -55,7 +56,7 @@ void XRcwa2D::prepareVacuum() {
   lam0.fillBlock(0, 0, tmp);
   lam0.fillBlock(m_orderN, m_orderN, tmp);
   XMux<ComplexMatrix> Q0;
-  Q0.resize(m_orderN*2,m_orderN*2);
+  Q0.resize(m_orderN * 2, m_orderN * 2);
   Q0.fillBlock(0, 0, xKx * xKy);
   auto Q12 = xKx;
   Q12.eye();
@@ -98,16 +99,16 @@ void XRcwa2D::createKMatrices() {
     m_Kx_norm[i][i] = m_kx_inc_norm - m_kgrids[i].first * m_lambda / m_Lx;
     m_Ky_norm[i][i] = m_ky_inc_norm - m_kgrids[i].second * m_lambda / m_Ly;
 
-    m_Kz_norm_ref[i][i] = -Conj(
-        std::sqrt(Conj(m_eps_ref) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
-                  m_Ky_norm[i][i] * m_Ky_norm[i][i]));
-    m_Kz_norm_trn[i][i] = Conj(
-        std::sqrt(Conj(m_eps_trn) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
-                  m_Ky_norm[i][i] * m_Ky_norm[i][i]));
- 
-    m_Kz0_norm[i][i] = Conj(std::sqrt(Complex{1.f, 0.f} -
-                                           m_Kx_norm[i][i] * m_Kx_norm[i][i] -
-                                           m_Ky_norm[i][i] * m_Ky_norm[i][i]));
+    m_Kz_norm_ref[i][i] =
+        -Conj(std::sqrt(Conj(m_eps_ref) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+                        m_Ky_norm[i][i] * m_Ky_norm[i][i]));
+    m_Kz_norm_trn[i][i] =
+        Conj(std::sqrt(Conj(m_eps_trn) - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+                       m_Ky_norm[i][i] * m_Ky_norm[i][i]));
+
+    m_Kz0_norm[i][i] =
+        Conj(std::sqrt(Complex{1.f, 0.f} - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+                       m_Ky_norm[i][i] * m_Ky_norm[i][i]));
   }
 }
 
@@ -390,7 +391,8 @@ SMat XRcwa2D::redheffer(SMat& a, SMat& b) {
 }
 
 void XRcwa2D::setSourcePolarization(int pol) {
-  m_src.resize(m_orderN * 2);m_src.zero();
+  m_src.resize(m_orderN * 2);
+  m_src.zero();
   int mid = m_orderN / 2;
   Real px, py;
   if (pol == 0) {
@@ -398,7 +400,7 @@ void XRcwa2D::setSourcePolarization(int pol) {
     px = -sin(m_phi);
     py = -cos(m_phi);
   } else if (pol == 1) {
-    //TM
+    // TM
     Real cs = cos(m_theta);
     px = -cs * cos(m_phi);
     py = cs * sin(m_phi);
@@ -407,14 +409,89 @@ void XRcwa2D::setSourcePolarization(int pol) {
   }
   m_src[mid] = px;
   m_src[mid + m_orderN] = py;
+
+  m_rxry = m_global_smat.s11 * wrap_xmux(m_src);
+  m_txty = m_global_smat.s21 * wrap_xmux(m_src);
+
+  evalReflectionZ();
+  evalTransmissionZ();
 }
 
-ComplexVector XRcwa2D::getReflection() {
-  auto ref = m_global_smat.s11 * wrap_xmux(m_src);
-  return ref.cpu();
+ComplexVector XRcwa2D::getReflectionX() {
+  return m_rxry.cpu().getSubArray(0, m_orderN);
 }
 
-ComplexVector XRcwa2D::getTransmission() {
-  auto trn = m_global_smat.s21 * wrap_xmux(m_src);
-  return trn.cpu();
+ComplexVector XRcwa2D::getReflectionY() {
+  return m_rxry.cpu().getSubArray(m_orderN, m_orderN);
 }
+
+void XRcwa2D::evalReflectionZ() {
+  ComplexVector rx = getReflectionX();
+  ComplexVector ry = getReflectionY();
+
+  auto xm_rx = wrap_xmux(rx);
+  auto xm_ry = wrap_xmux(ry);
+
+  auto& xm_rz = m_rz;
+
+  auto xKx = wrap_xmux(m_Kx_norm);
+  auto xKy = wrap_xmux(m_Ky_norm);
+  auto xKz = wrap_xmux(m_Kz_norm_ref);
+  auto tmp = xKx * xm_rx;
+  tmp.add(xKy * xm_ry);
+  linsolve_gpu(xKz, tmp, xm_rz);
+  xm_rz.scale(-1.f);
+}
+
+ComplexVector XRcwa2D::getTransmissionX() {
+  return m_txty.cpu().getSubArray(0, m_orderN);
+}
+
+ComplexVector XRcwa2D::getTransmissionY() {
+  return m_txty.cpu().getSubArray(m_orderN, m_orderN);
+}
+
+void XRcwa2D::evalTransmissionZ() {
+  ComplexVector tx = getTransmissionX();
+  ComplexVector ty = getTransmissionY();
+
+  auto xm_tx = wrap_xmux(tx);
+  auto xm_ty = wrap_xmux(ty);
+
+  auto& xm_tz = m_tz;
+
+  auto xKx = wrap_xmux(m_Kx_norm);
+  auto xKy = wrap_xmux(m_Ky_norm);
+  auto xKz = wrap_xmux(m_Kz_norm_trn);
+  auto tmp = xKx * xm_tx;
+  tmp.add(xKy * xm_ty);
+  linsolve_gpu(xKz, tmp, xm_tz);
+  xm_tz.scale(-1.f);
+}
+
+Real XRcwa2D::getPowerReflection() {
+  auto rx = getReflectionX();
+  auto ry = getReflectionY();
+  auto rz = getReflectionZ();
+
+  ComplexVector R2 = rx;
+  R2.zero();
+  R2.for_each(
+      [](Complex& a, Complex& b, Complex& c, Complex& d) {
+        return std::norm(b) + std::norm(c) + std::norm(d);
+      },
+      rx, ry, rz);
+
+  ComplexMatrix real_Kz = m_Kz_norm_ref;
+  for (size_t i = 0; i < real_Kz.getSize1(); i++) {
+    real_Kz[i][i] = -real_Kz[i][i].real() / m_kz_inc_norm;
+  }
+
+  auto real_xKz = wrap_xmux(real_Kz);
+  auto xR2 = wrap_xmux(R2);
+
+  auto R = real_xKz * xR2;
+
+  return R.sum().real();
+}
+Real XRcwa2D::getPowerTransmission() { return 0.f; }

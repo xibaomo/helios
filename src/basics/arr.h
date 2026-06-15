@@ -93,6 +93,15 @@ class Array1D {
     }
     return std::sqrt(s);
   }
+
+  Array1D<T> getSubArray(size_t start, size_t sz) {
+    Array1D<T> ret(sz);
+    size_t k=0; 
+    for (size_t i = start; i < start + sz; i++) {
+      ret[k++] = m_data[i];
+    }
+    return ret;
+  }
 };
 
 // *****************************************************************************

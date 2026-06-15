@@ -32,23 +32,25 @@ bool test_rcwa_homogeneous() {
 
   rcwa.setSourcePolarization(0);
 
-  ComplexVector r = rcwa.getReflection();
-  ComplexVector t = rcwa.getTransmission();
+  ComplexVector r = rcwa.getReflectionXY();
+  ComplexVector t = rcwa.getTransmissionXY();
 
   cout << "TE ref: " << endl;
   show_arr(r);
   cout << "TE trn: " << endl;
   show_arr(t);
 
+  cout << "TE power ref: " << rcwa.getPowerReflection() << endl;
+
   rcwa.setSourcePolarization(1);
 
-  r = rcwa.getReflection();
-  t = rcwa.getTransmission();
+  r = rcwa.getReflectionXY();
+  t = rcwa.getTransmissionXY();
 
-  cout << "TM ref: " << endl;
-  show_arr(r);
-  cout << "TM trn: " << endl;
-  show_arr(t);
+//   cout << "TM ref: " << endl;
+//   show_arr(r);
+//   cout << "TM trn: " << endl;
+//   show_arr(t);
 
   return true;
 }

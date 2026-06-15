@@ -73,20 +73,19 @@ void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
 
 void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
                   XMux<ComplexVector>& x) {
+  A.to_gpu();
+  b.to_gpu();
+  if (x.getSize() == 0) {
+    x = b; //on gpu
+    x.zero();
+  }
   XMux<ComplexMatrix> B(b.getSize(), 1);
-  Complex* pB = B.cpu().getData();
-  const Complex* pb = b.cpu().getData();
-  memcpy(pB, pb, sizeof(Complex) * b.getSize());
+  CUDA_CHECK(cudaMemcpy(B.device_data(), b.device_data(), sizeof(cuComplex)*b.getSize(), cudaMemcpyDeviceToDevice));
 
-  XMux<ComplexMatrix> X(b.getSize(), 1);
+  XMux<ComplexMatrix> X;
   linsolve_mat_gpu(A, B, X);
 
   void* d_X = X.device_data();
-  if (!x.device_data()) {
-    Complex* d_x;
-    CUDA_CHECK(cudaMalloc(&d_x, sizeof(cuComplex) * b.getSize()));
-    x.setDeviceData(d_x);
-  }
   CUDA_CHECK(cudaMemcpy(x.device_data(), d_X, sizeof(cuComplex) * b.getSize(),
                         cudaMemcpyDeviceToDevice));
   x.touchGPU();
@@ -170,8 +169,10 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
   void* d_BT;
   CUDA_CHECK(cudaMalloc(&d_AT, sizeof(cuComplex) * A.getSize()));
   CUDA_CHECK(cudaMalloc(&d_BT, sizeof(cuComplex) * B.getSize()));
-  transpose_gpu(A.getSize1(), A.getSize2(), (Complex*)A.device_data(), (Complex*)d_AT);
-  transpose_gpu(B.getSize1(), B.getSize2(), (Complex*)B.device_data(), (Complex*)d_BT);
+  transpose_gpu(A.getSize1(), A.getSize2(), (Complex*)A.device_data(),
+                (Complex*)d_AT);
+  transpose_gpu(B.getSize1(), B.getSize2(), (Complex*)B.device_data(),
+                (Complex*)d_BT);
   // solving XA=B amounts to solving A'X'=B'
   // solve A'X'=B'
   auto& handle = CuHandleMgr::getInstance().getCuSolverHandle();
@@ -211,7 +212,8 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
 
   // solve XA=B
   CUSOLVER_CHECK(cusolverDnXgetrs(handle, params, CUBLAS_OP_N, n, m, CUDA_C_32F,
-                                  d_AT, n, d_ipiv, CUDA_C_32F, d_BT, m, d_info));
+                                  d_AT, n, d_ipiv, CUDA_C_32F, d_BT, m,
+                                  d_info));
 
   CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
   if (h_info) {
