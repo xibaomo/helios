@@ -137,6 +137,7 @@ class XMux : public OptionalDim<Arr> {
       this->m_size1 = arr.getSize1();
       this->m_size2 = arr.getSize2();
     }
+    to_gpu();
   }
 
   XMux(const XMux& other)

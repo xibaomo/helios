@@ -11,7 +11,7 @@ static AddUnitTest t_rcwa_homo("test_rcwa_homogeneous", test_rcwa_homogeneous);
 
 bool test_rcwa_homogeneous() {
   int max_order_x = 1;
-  int max_order_y = 0;
+  int max_order_y = 1;
 
   Real lambda = 193.f;
   Real L = 400.f;  // sim domain size

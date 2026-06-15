@@ -255,8 +255,8 @@ void XRcwa2D::buildSMat_reflection() {
   XMux<ComplexMatrix> Lam_ref = Qref;
   // XMux<ComplexMatrix> tmp = m_Kz_norm_ref;
   auto tmp = wrap_xmux(m_Kz_norm_ref);
-  tmp.to_gpu();
   tmp.scale(Complex{0.f, -1.f});
+  Lam_ref.zero();
   Lam_ref.fillBlock(0, 0, tmp);
   Lam_ref.fillBlock(m_orderN, m_orderN, tmp);
   XMux<ComplexMatrix> Vref;
@@ -324,7 +324,6 @@ void XRcwa2D::buildSMat_transmission() {
   Lam_trn.zero();
   // XMux<ComplexMatrix> tmp = m_Kz_norm_trn;
   auto tmp = wrap_xmux(m_Kz_norm_trn);
-  tmp.to_gpu();
   tmp.scale(Complex{0.f, 1.f});
   Lam_trn.fillBlock(0, 0, tmp);
   Lam_trn.fillBlock(m_orderN, m_orderN, tmp);
