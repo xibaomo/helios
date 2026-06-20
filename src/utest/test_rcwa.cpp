@@ -40,17 +40,27 @@ bool test_rcwa_homogeneous() {
   cout << "TE trn: " << endl;
   show_arr(t);
 
-  cout << "TE power ref: " << rcwa.getPowerReflection() << endl;
+  cout << "TE power ref: " << endl;
+  show_arr(rcwa.getPowerReflectionsAllOrders());
+
+  cout << "TE power trn: " << endl;
+  show_arr(rcwa.getPowerTransmissionsAllOrders());
 
   rcwa.setSourcePolarization(1);
 
   r = rcwa.getReflectionXY();
   t = rcwa.getTransmissionXY();
 
-//   cout << "TM ref: " << endl;
-//   show_arr(r);
-//   cout << "TM trn: " << endl;
-//   show_arr(t);
+  cout << "TM ref: " << endl;
+  show_arr(r);
+  cout << "TM trn: " << endl;
+  show_arr(t);
+
+  cout << "TM power ref: " << endl;
+  show_arr(rcwa.getPowerReflectionsAllOrders());
+
+  cout << "TM power trn: " << endl;
+  show_arr(rcwa.getPowerTransmissionsAllOrders());
 
   return true;
 }

@@ -102,8 +102,13 @@ class Array1D {
     }
     return ret;
   }
+
+  T& end() { return m_data[m_size - 1]; }
 };
 
+template class Array1D<int>;
+template class Array1D<float>;
+template class Array1D<std::complex<float>>;
 // *****************************************************************************
 
 template <typename T>
@@ -174,7 +179,6 @@ typedef std::complex<float> Complex;
 template class Array2D<int>;
 template class Array2D<float>;
 template class Array2D<Complex>;
-template class Array1D<Complex>;
 
 typedef Array2D<Complex> ComplexMatrix;
 typedef Array1D<Complex> ComplexVector;

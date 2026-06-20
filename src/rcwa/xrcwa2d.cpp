@@ -469,7 +469,7 @@ void XRcwa2D::evalTransmissionZ() {
   xm_tz.scale(-1.f);
 }
 
-Real XRcwa2D::getPowerReflection() {
+ComplexVector XRcwa2D::getPowerReflectionsAllOrders() {
   auto rx = getReflectionX();
   auto ry = getReflectionY();
   auto rz = getReflectionZ();
@@ -492,6 +492,107 @@ Real XRcwa2D::getPowerReflection() {
 
   auto R = real_xKz * xR2;
 
-  return R.sum().real();
+  return R.cpu();
 }
-Real XRcwa2D::getPowerTransmission() { return 0.f; }
+ComplexVector XRcwa2D::getPowerTransmissionsAllOrders() {
+  auto tx = getTransmissionX();
+  auto ty = getTransmissionY();
+  auto tz = getTransmissionZ();
+
+  ComplexVector T2 = tx;
+  T2.zero();
+  T2.for_each(
+      [](Complex& a, Complex& b, Complex& c, Complex& d) {
+        return std::norm(b) + std::norm(c) + std::norm(d);
+      },
+      tx, ty, tz);
+
+  ComplexMatrix real_Kz = m_Kz_norm_trn;
+  for (size_t i = 0; i < real_Kz.getSize1(); i++) {
+    real_Kz[i][i] = real_Kz[i][i].real() / m_kz_inc_norm;
+  }
+
+  auto real_xKz = wrap_xmux(real_Kz);
+  auto xT2 = wrap_xmux(T2);
+
+  auto T = real_xKz * xT2;
+
+  return T.cpu();
+}
+
+ConvMats XRcwa2D::epsImg2ConvMats(const ComplexMatrix& eps_img, int max_order) {
+  const int nx = eps_img.getSize1();
+  const int ny = eps_img.getSize2();
+  ComplexMatrix F_eps_img = eps_img;
+  auto xm_F_epsimg = wrap_xmux(F_eps_img);
+  fft2d(xm_F_epsimg);
+  xm_F_epsimg.scale(1.f / (nx * ny));
+  fftshift(xm_F_epsimg);
+
+  ComplexMatrix inv_eps_img = eps_img;
+  inv_eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f} / a; });
+  auto xm_inv_epsimg = wrap_xmux(inv_eps_img);
+  fft2d(xm_inv_epsimg);
+  xm_inv_epsimg.scale(1.f / (nx * ny));
+  fftshift(xm_inv_epsimg);
+
+  // the freq range of conv mat could be as high as 4*max_order
+  // but actual size of conv mat is just up to 2*max_order
+  Array1D<int> kx_range(4 * max_order + 1);
+  for (size_t i = 0; i < kx_range.getSize(); i++) {
+    kx_range[i] = -2 * max_order + i;
+  }
+  Array1D<int> ky_range = kx_range;
+
+  int cx = nx / 2;
+  int cy = ny / 2;
+
+  int start_kx_idx = cx + kx_range[0];
+  int end_kx_idx = cx + kx_range.end();
+  int start_ky_idx = cy + kx_range[0];
+  int end_ky_idx = cy + ky_range.end();
+
+  int sub_nx = end_kx_idx - start_kx_idx + 1;
+  int sub_ny = end_ky_idx - start_ky_idx + 1;
+  ComplexMatrix F_eps_truncated(sub_nx, sub_ny);
+  ComplexMatrix F_inv_eps_truncated(sub_nx, sub_ny);
+  auto xm_F_eps_truncated = wrap_xmux(F_eps_truncated);
+  auto xm_F_inv_eps_truncated = wrap_xmux(F_inv_eps_truncated);
+  // TODO: actually no need to truncate the original spectrum, cut this in
+  // future
+  xm_F_epsimg.getBlock(start_kx_idx, sub_nx, start_ky_idx, sub_ny,
+                       xm_F_eps_truncated);
+  xm_inv_epsimg.getBlock(start_kx_idx, sub_nx, start_ky_idx, sub_ny,
+                         xm_F_inv_eps_truncated);
+
+  xm_F_epsimg.to_cpu();
+  xm_inv_epsimg.to_cpu();
+
+  int orders_x = 2 * max_order + 1;
+  int orders_y = 2 * max_order + 1;
+  int total_orders = orders_x * orders_y;
+  ConvMats conv_mats;
+  auto& [eps_conv, inv_eps_conv] = conv_mats;
+  eps_conv.resize(total_orders, total_orders);
+  eps_conv.zero();
+  inv_eps_conv = eps_conv;
+
+  for (size_t i = 0; i < total_orders; i++) {
+    int kx_out = i / orders_y - max_order;
+    int ky_out = i % orders_y - max_order;
+    for (size_t j = 0; j < total_orders; j++) {
+      int kx_in = j / orders_y - max_order;
+      int ky_in = j % orders_y - max_order;
+
+      int kx_diff = kx_out - kx_in;
+      int ky_diff = ky_out - ky_in;
+
+      int idx_kx_diff = kx_diff - kx_range[0];
+      int idx_ky_diff = ky_diff - ky_range[0];
+      eps_conv[i][j] = F_eps_truncated[idx_kx_diff][idx_ky_diff];
+      inv_eps_conv[i][j] = F_inv_eps_truncated[idx_kx_diff][idx_ky_diff];
+    }
+  }
+
+  return conv_mats;
+}

@@ -367,6 +367,27 @@ class XMux : public OptionalDim<Arr> {
     }
   }
 
+  void getBlock(size_t istart, size_t isize, size_t jstart, size_t jsize,
+                XMux<Arr>& block) {
+    to_gpu();
+    block.resize(isize, jsize);
+    block.to_gpu();
+    if constexpr (XMux::is_2D::value) {
+      void* d_sub = block.device_data();
+      size_t spitch = this->m_size1 * sizeof(dev_dtype);
+      size_t dpitch = isize * sizeof(dev_dtype);
+
+      // start position in big matrix
+      dev_dtype* d_A_start = (dev_dtype*)this->m_device_data + (jstart * this->m_size1 + istart);
+
+      CUDA_CHECK(cudaMemcpy2D(d_sub, dpitch, d_A_start,
+                              spitch,  // width_bytes
+                              isize * sizeof(dev_dtype), jsize,
+                              cudaMemcpyDeviceToDevice));
+      cudaDeviceSynchronize();
+    }
+  }
+
   void touchGPU() { m_dev = Device::__gpu__; }
   void touchCPU() { m_dev = Device::__cpu__; }
 

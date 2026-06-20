@@ -22,6 +22,7 @@ struct SMat {
   }
 };  // SMat of a layer is usually symmetric, but overall Smat is not.
 
+typedef std::tuple<ComplexMatrix, ComplexMatrix> ConvMats;
 class XRcwa2D {
  private:
   Real m_lambda;
@@ -104,6 +105,9 @@ class XRcwa2D {
   ComplexVector getTransmissionZ() { return m_tz.cpu(); }
   void evalTransmissionZ();
 
-  Real getPowerReflection();
-  Real getPowerTransmission();
+  ComplexVector getPowerReflectionsAllOrders();
+  ComplexVector getPowerTransmissionsAllOrders();
+
+  //compute convolution matrix of epsilon. user may cahce it and reuse it
+  ConvMats epsImg2ConvMats(const ComplexMatrix& eps_img, int max_order);
 };
