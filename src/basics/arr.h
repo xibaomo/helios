@@ -182,3 +182,6 @@ template class Array2D<Complex>;
 
 typedef Array2D<Complex> ComplexMatrix;
 typedef Array1D<Complex> ComplexVector;
+
+typedef Array2D<Real> RealMatrix;
+typedef Array1D<Real> RealVector;

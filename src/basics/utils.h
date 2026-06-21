@@ -39,3 +39,5 @@ inline Complex Conj(const Complex& z) {
 
     return std::conj(zz);
 }
+
+std::tuple<RealMatrix,RealMatrix> generateNormalField(const ComplexMatrix& eps_img, Real dx, Real dy);

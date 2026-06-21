@@ -49,7 +49,8 @@ void fftshift(XMux<ComplexMatrix>& A) {
                (W + blockDim.y - 1) / blockDim.y);
 
   // Launch the Out-of-Place shift kernel
-  fftshift_2d_col_major_kernel<<<gridDim, blockDim, 0, 0>>>((cuComplex*)d_in,(cuComplex*) d_out, H, W);
+  fftshift_2d_col_major_kernel<<<gridDim, blockDim, 0, 0>>>(
+      (cuComplex*)d_in, (cuComplex*)d_out, H, W);
 
   // Synchronous/Asynchronous error checking
   cudaError_t err = cudaGetLastError();
@@ -58,7 +59,8 @@ void fftshift(XMux<ComplexMatrix>& A) {
               << cudaGetErrorString(err) << std::endl;
   }
 
-  CUDA_CHECK(cudaMemcpy(d_in, d_out, sizeof(cuComplex) * A.getSize(), cudaMemcpyDeviceToDevice));
+  CUDA_CHECK(cudaMemcpy(d_in, d_out, sizeof(cuComplex) * A.getSize(),
+                        cudaMemcpyDeviceToDevice));
   cudaFree(d_out);
 
   cudaDeviceSynchronize();
@@ -147,4 +149,119 @@ ComplexMatrix computeConvMat(const ComplexMatrix& eps_img, int max_order_x,
   }
 
   return conv_mat;
+}
+
+struct Real3 {
+  Real x;
+  Real y;
+  Real z;
+};
+
+// ============================================================================
+// CUDA Kernel: Use Sobel operator to compute  unit normal vector field of
+// complex matrix (Column-Major)
+// ============================================================================
+__global__ void compute_normal_sobel_col_major_kernel(
+    const cuComplex* __restrict__ d_in, Real3* __restrict__ d_normals, int H,
+    int W, Real dx, Real dy) {
+  // Coalescing: threadIdx.x ?? Contiguous Rows (i)
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (i < H && j < W) {
+    // ????????? lambda ??
+    auto get_height = [&](int r, int c) -> Real {
+      r = max(0, min(r, H - 1));
+      c = max(0, min(c, W - 1));
+      return cuCabsf(
+          d_in[c * H + r]);  // compute amplitude: sqrt(real^2 + imag^2)
+    };
+
+    // ====================================================================
+    // 1. Apply Sobel X operator (compute neighbor 3x3 area X gradient)
+    // ====================================================================
+    Real h00 = get_height(i - 1, j - 1);
+    Real h10 = get_height(i, j - 1);
+    Real h20 = get_height(i + 1, j - 1);
+
+    Real h02 = get_height(i - 1, j + 1);
+    Real h12 = get_height(i, j + 1);
+    Real h22 = get_height(i + 1, j + 1);
+
+    // convolution
+    Real dg_dx =
+        ((h02 + 2.0f * h12 + h22) - (h00 + 2.0f * h10 + h20)) / (8.0f * dx);
+
+    // ====================================================================
+    // 2. Apply Sobel Y operator (compute neighbor 3x3 area Y gradient)
+    // ====================================================================
+    Real h01 = get_height(i - 1, j);
+    Real h21 = get_height(i + 1, j);
+
+    // convolution
+    Real dg_dy =
+        ((h20 + 2.0f * h21 + h22) - (h00 + 2.0f * h01 + h02)) / (8.0f * dy);
+
+    // ====================================================================
+    // 3. normalization of normal vectors
+    // ====================================================================
+    Real nx = -dg_dx;
+    Real ny = -dg_dy;
+    Real nz = 1.0f;
+
+    // fast inverse sqrt
+    Real inv_len = rsqrtf(nx * nx + ny * ny + nz * nz);
+
+    int out_idx = j * H + i;  // Column-Major ????
+    d_normals[out_idx].x = nx * inv_len;
+    d_normals[out_idx].y = ny * inv_len;
+    d_normals[out_idx].z = nz * inv_len;
+  }
+}
+
+std::tuple<RealMatrix, RealMatrix> generateNormalField(
+    const ComplexMatrix& eps_img, Real dx, Real dy) {
+  auto xm_eps_img = wrap_xmux(eps_img);
+  xm_eps_img.to_gpu();
+
+  std::tuple<RealMatrix, RealMatrix> normal_field;
+  // 32 threads in X map to continuous row mrmory, ensure Warp Coalescing
+  dim3 blockDim(32, 16);
+
+  const int H = eps_img.getSize1();
+  const int W = eps_img.getSize2();
+
+  dim3 gridDim((H + blockDim.x - 1) / blockDim.x,
+               (W + blockDim.y - 1) / blockDim.y);
+
+  void* d_in = xm_eps_img.device_data();
+  void* d_normals;
+  CUDA_CHECK(cudaMalloc(&d_normals, sizeof(Real3) * H * W));
+
+  compute_normal_sobel_col_major_kernel<<<gridDim, blockDim, 0, 0>>>(
+      (cuComplex*)d_in, (Real3*)d_normals, H, W, dx, dy);
+
+  // ??????
+  cudaError_t err = cudaGetLastError();
+  if (err != cudaSuccess) {
+    std::cerr << "Sobel normal field kernel failed: " << cudaGetErrorString(err)
+              << std::endl;
+  }
+
+  Real3* h_normals = (Real3*)malloc(sizeof(Real3) * H * W);
+  CUDA_CHECK(cudaMemcpy(h_normals, d_normals, sizeof(Real3) * H * W,
+                        cudaMemcpyDeviceToHost));
+  cudaFree(d_normals);
+
+  auto& [nx, ny] = normal_field;
+  nx.resize(H, W);
+  ny.resize(H, W);
+  for (size_t i = 0; i < H; i++) {
+    for (size_t j = 0; j < W; j++) {
+      nx[i][j] = h_normals[i * W + j].x;
+      ny[i][j] = h_normals[i * W + j].y;
+    }
+  }
+
+  return normal_field;
 }
