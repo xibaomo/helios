@@ -104,6 +104,12 @@ class Array1D {
   }
 
   T& end() { return m_data[m_size - 1]; }
+
+  T sum() {
+    T s = 0.f;
+    for (size_t i = 0; i < m_size; i++) s += m_data[i];
+    return s;
+  }
 };
 
 template class Array1D<int>;

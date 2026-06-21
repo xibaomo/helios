@@ -12,6 +12,10 @@ static AddUnitTest t_rcwa_homo("test_rcwa_homogeneous", test_rcwa_homogeneous);
 static bool test_conv_mat();
 static AddUnitTest t_conv_mat("test_conv_mat", test_conv_mat);
 
+static bool test_normal_vector_field();
+static AddUnitTest t_normal_field("test_normal_vector_field",
+                                  test_normal_vector_field);
+
 bool test_rcwa_homogeneous() {
   int max_order_x = 1;
   int max_order_y = 1;
@@ -91,9 +95,49 @@ bool test_conv_mat() {
   cout << "sum of eps_conv" << xm_cm.sum() << endl;
 
   ComplexMatrix inv_eps = eps_img;
-  inv_eps.for_each([](Complex& a) { return 1.f/a;});
-  ComplexMatrix inv_cm = computeConvMat(inv_eps,1,1);
+  inv_eps.for_each([](Complex& a) { return 1.f / a; });
+  ComplexMatrix inv_cm = computeConvMat(inv_eps, 1, 1);
   auto xm_inv_cm = wrap_xmux(inv_cm);
   cout << "sum of inv eps: " << xm_inv_cm.sum() << endl;
+  return true;
+}
+
+bool test_normal_vector_field() {
+  int L = 400;
+  int a = 80;
+  Complex eps = Complex{2.612, -0.356};
+  eps = eps * eps;
+  ComplexMatrix eps_img(L, L);
+  eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f}; });
+  int s = L / 2 - a / 2;
+  for (int i = s; i < s + a; i++) {
+    for (int j = s; j < s + a; j++) {
+      eps_img[i][j] = eps;
+    }
+  }
+
+  auto nvf = generateNormalField(eps_img, 1, 1);  // 1nm dx,dy
+  auto& [nx, ny] = nvf;
+
+  RealMatrix z = nx;
+  z.for_each([](Real a, Real b, Real c) { return b * b + c * c; }, nx, ny);
+  cout << "sum of z: " << z.sum() << endl;
+  //   cout << "nx: " << endl;
+  //   show_arr(z);
+
+  ComplexMatrix nxx = eps_img;
+  nxx.for_each([](Complex& a, Real b) { return Complex{b * b, 0.f}; }, nx);
+  ComplexMatrix nxx_conv = computeConvMat(nxx, 1, 1);
+  cout << "conv nxx sum: " << nxx_conv.sum() << endl;
+
+  ComplexMatrix nxy = eps_img;
+  nxy.for_each([](Complex& a, Real b, Real c) { return b * c; }, nx, ny);
+  ComplexMatrix nxy_conv = computeConvMat(nxy, 1, 1);
+  cout << "conv nxy sum: " << nxy_conv.sum() << endl;
+
+  ComplexMatrix nyy = eps_img;
+  nyy.for_each([](Complex& a, Real b) { return Complex{b * b, 0.f}; }, ny);
+  ComplexMatrix nyy_conv = computeConvMat(nyy, 1, 1);
+  cout << "conv nyy sum: " << nyy_conv.sum() << endl;
   return true;
 }

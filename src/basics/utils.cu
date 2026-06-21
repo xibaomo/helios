@@ -151,34 +151,36 @@ ComplexMatrix computeConvMat(const ComplexMatrix& eps_img, int max_order_x,
   return conv_mat;
 }
 
-struct Real3 {
-  Real x;
-  Real y;
-  Real z;
+// Structure to store 2D plane vectors
+struct Real2 {
+  Real x;  // X-component (corresponds to changes across columns)
+  Real y;  // Y-component (corresponds to changes across rows)
 };
 
 // ============================================================================
-// CUDA Kernel: Use Sobel operator to compute  unit normal vector field of
-// complex matrix (Column-Major)
+// CUDA Kernel: Computes 2D normalized gradient direction field using Sobel
+// Layout: Optimized for Column-Major matrix memory alignment
 // ============================================================================
-__global__ void compute_normal_sobel_col_major_kernel(
-    const cuComplex* __restrict__ d_in, Real3* __restrict__ d_normals, int H,
+__global__ void compute_gradient_2d_sobel_kernel(
+    const cuComplex* __restrict__ d_in, Real2* __restrict__ d_gradients, int H,
     int W, Real dx, Real dy) {
-  // Coalescing: threadIdx.x ?? Contiguous Rows (i)
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  // Coalescing Rule: threadIdx.x must handle the contiguous row index (i)
+  // to achieve perfect memory coalescing in Column-Major layout.
+  int i = blockIdx.x * blockDim.x + threadIdx.x;  // Row index (Y-geometry)
+  int j = blockIdx.y * blockDim.y + threadIdx.y;  // Column index (X-geometry)
 
   if (i < H && j < W) {
-    // ????????? lambda ??
+    // Boundary-safe lambda to compute complex magnitude securely at clamped
+    // edges
     auto get_height = [&](int r, int c) -> Real {
       r = max(0, min(r, H - 1));
       c = max(0, min(c, W - 1));
       return cuCabsf(
-          d_in[c * H + r]);  // compute amplitude: sqrt(real^2 + imag^2)
+          d_in[c * H + r]);  // Column-Major flat indexing: col * H + row
     };
 
     // ====================================================================
-    // 1. Apply Sobel X operator (compute neighbor 3x3 area X gradient)
+    // 1. Apply Sobel X-Operator in index space, then scale by physical dx
     // ====================================================================
     Real h00 = get_height(i - 1, j - 1);
     Real h10 = get_height(i, j - 1);
@@ -188,34 +190,38 @@ __global__ void compute_normal_sobel_col_major_kernel(
     Real h12 = get_height(i, j + 1);
     Real h22 = get_height(i + 1, j + 1);
 
-    // convolution
+    // Compute physical gradient along X-axis (divided by 8 for operator
+    // normalization)
     Real dg_dx =
         ((h02 + 2.0f * h12 + h22) - (h00 + 2.0f * h10 + h20)) / (8.0f * dx);
 
     // ====================================================================
-    // 2. Apply Sobel Y operator (compute neighbor 3x3 area Y gradient)
+    // 2. Apply Sobel Y-Operator in index space, then scale by physical dy
     // ====================================================================
     Real h01 = get_height(i - 1, j);
     Real h21 = get_height(i + 1, j);
 
-    // convolution
+    // Compute physical gradient along Y-axis
     Real dg_dy =
         ((h20 + 2.0f * h21 + h22) - (h00 + 2.0f * h01 + h02)) / (8.0f * dy);
 
     // ====================================================================
-    // 3. normalization of normal vectors
+    // 3. Vector magnitude calculation and 2D normalization
     // ====================================================================
-    Real nx = -dg_dx;
-    Real ny = -dg_dy;
-    Real nz = 1.0f;
+    Real len_2d = sqrtf(dg_dx * dg_dx + dg_dy * dg_dy);
 
-    // fast inverse sqrt
-    Real inv_len = rsqrtf(nx * nx + ny * ny + nz * nz);
+    int out_idx = j * H + i;  // Destination index in Column-Major output
 
-    int out_idx = j * H + i;  // Column-Major ????
-    d_normals[out_idx].x = nx * inv_len;
-    d_normals[out_idx].y = ny * inv_len;
-    d_normals[out_idx].z = nz * inv_len;
+    // Normalize to get pure directional vectors and prevent division by zero
+    if (len_2d > 1e-8f) {
+      Real inv_len = 1.0f / len_2d;
+      d_gradients[out_idx].x = dg_dx * inv_len;
+      d_gradients[out_idx].y = dg_dy * inv_len;
+    } else {
+      // Flat regions have no explicit gradient direction
+      d_gradients[out_idx].x = 0.0f;
+      d_gradients[out_idx].y = 0.0f;
+    }
   }
 }
 
@@ -236,10 +242,10 @@ std::tuple<RealMatrix, RealMatrix> generateNormalField(
 
   void* d_in = xm_eps_img.device_data();
   void* d_normals;
-  CUDA_CHECK(cudaMalloc(&d_normals, sizeof(Real3) * H * W));
+  CUDA_CHECK(cudaMalloc(&d_normals, sizeof(Real2) * H * W));
 
-  compute_normal_sobel_col_major_kernel<<<gridDim, blockDim, 0, 0>>>(
-      (cuComplex*)d_in, (Real3*)d_normals, H, W, dx, dy);
+  compute_gradient_2d_sobel_kernel<<<gridDim, blockDim, 0, 0>>>(
+      (cuComplex*)d_in, (Real2*)d_normals, H, W, dx, dy);
 
   // ??????
   cudaError_t err = cudaGetLastError();
@@ -248,8 +254,8 @@ std::tuple<RealMatrix, RealMatrix> generateNormalField(
               << std::endl;
   }
 
-  Real3* h_normals = (Real3*)malloc(sizeof(Real3) * H * W);
-  CUDA_CHECK(cudaMemcpy(h_normals, d_normals, sizeof(Real3) * H * W,
+  Real2* h_normals = (Real2*)malloc(sizeof(Real2) * H * W);
+  CUDA_CHECK(cudaMemcpy(h_normals, d_normals, sizeof(Real2) * H * W,
                         cudaMemcpyDeviceToHost));
   cudaFree(d_normals);
 
