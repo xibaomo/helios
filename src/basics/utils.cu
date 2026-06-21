@@ -1,60 +1,97 @@
 #include <cassert>
-#include "utils.h"
+
 #include "culinear.h"
-__global__ void fftshift_2d_power2_kernel(const cuComplex* __restrict__ input,
-                                          cuComplex* __restrict__ output,
-                                          int width, int height) {
-  int x_out = blockIdx.x * blockDim.x + threadIdx.x;
-  int y_out = blockIdx.y * blockDim.y + threadIdx.y;
+#include "utils.h"
 
-  if (x_out < width && y_out < height) {
-    // Bitwise XOR replacement for power-of-2 modulo arithmetic
-    int x_in = x_out ^ (width >> 1);
-    int y_in = y_out ^ (height >> 1);
+// CUDA Kernel for 2D FFTShift (Optimized for Column-Major Layout)
+__global__ void fftshift_2d_col_major_kernel(const cuComplex* __restrict__ d_in,
+                                             cuComplex* __restrict__ d_out,
+                                             int H, int W) {
+  // CRITICAL: threadIdx.x must map to the Row (fastest-changing index in
+  // memory)
+  int out_row = blockIdx.x * blockDim.x + threadIdx.x;
+  int out_col = blockIdx.y * blockDim.y + threadIdx.y;
 
-    output[y_out * width + x_out] = input[y_in * width + x_in];
+  // Boundary check for the output grid
+  if (out_row < H && out_col < W) {
+    // 1. Calculate shift offsets for both axes
+    // For fftshift: shift = (N + 1) / 2
+    // For ifftshift: shift = N / 2
+    int shift_row = (H + 1) / 2;
+    int shift_col = (W + 1) / 2;
+
+    // 2. Map Output index back to Input index periodically
+    // (out - shift + N) % N guarantees correct mathematical wrapping
+    int in_row = (out_row - shift_row + H) % H;
+    int in_col = (out_col - shift_col + W) % W;
+
+    // 3. Compute flat linear memory addresses using Column-Major formula: (col
+    // * H + row)
+    int out_idx = out_col * H + out_row;
+    int in_idx = in_col * H + in_row;
+
+    // 4. Global memory streaming (Fully Coalesced because out_row is bound to
+    // threadIdx.x)
+    d_out[out_idx] = d_in[in_idx];
   }
 }
-__global__ void ifftshift_2d_pow2_kernel(const cuComplex* __restrict__ input,
-                                         cuComplex* __restrict__ output,
-                                         int width, int height) {
-  // Calculate global thread coordinates (Row-Major: x = column, y = row)
-  int x_out = blockIdx.x * blockDim.x + threadIdx.x;
-  int y_out = blockIdx.y * blockDim.y + threadIdx.y;
-
-  // Direct boundary check
-  if (x_out < width && y_out < height) {
-    // Bitwise optimization for Power of 2:
-    // (x_out + width/2) % width is equivalent to x_out ^ (width / 2)
-    int x_in = x_out ^ (width >> 1);
-    int y_in = y_out ^ (height >> 1);
-
-    // Linear index mapping (cuFFT Row-Major standard: y * width + x)
-    int out_idx = y_out * width + x_out;
-    int in_idx = y_in * width + x_in;
-
-    // Coalesced memory transactions
-    output[out_idx] = input[in_idx];
-  }
-}
-
 void fftshift(XMux<ComplexMatrix>& A) {
-  assert(isPower2(A.getSize1()) && isPower2(A.getSize2()));
   A.to_gpu();
-  void* d_tmp;
-  dim3 block_size(16, 16);
+  void* d_out;
+  void* d_in = A.device_data();
+  CUDA_CHECK(cudaMalloc(&d_out, sizeof(cuComplex) * A.getSize()));
+  dim3 blockDim(32, 16);
+  int H = A.getSize1();
+  int W = A.getSize2();
 
-  dim3 grid_size((A.getSize1() + block_size.x - 1) / block_size.x,
-                 (A.getSize2() + block_size.y - 1) / block_size.y);
-  CUDA_CHECK(cudaMalloc(&d_tmp, sizeof(ComplexMatrix::dtype) * A.getSize()));
-  fftshift_2d_power2_kernel<<<grid_size, block_size>>>(
-      (const cuComplex*)A.device_data(), (cuComplex*)d_tmp, A.getSize1(),
-      A.getSize2());
-  CUDA_CHECK(cudaMemcpy(A.device_data(), d_tmp,
-                        sizeof(ComplexMatrix::dtype) * A.getSize(),
-                        cudaMemcpyDeviceToDevice));
-  CUDA_CHECK(cudaFree(d_tmp));
+  // Grid bounds calculated using Row-first logic
+  dim3 gridDim((H + blockDim.x - 1) / blockDim.x,
+               (W + blockDim.y - 1) / blockDim.y);
+
+  // Launch the Out-of-Place shift kernel
+  fftshift_2d_col_major_kernel<<<gridDim, blockDim, 0, 0>>>((cuComplex*)d_in,(cuComplex*) d_out, H, W);
+
+  // Synchronous/Asynchronous error checking
+  cudaError_t err = cudaGetLastError();
+  if (err != cudaSuccess) {
+    std::cerr << "Column-Major FFTShift launch failed: "
+              << cudaGetErrorString(err) << std::endl;
+  }
+
+  CUDA_CHECK(cudaMemcpy(d_in, d_out, sizeof(cuComplex) * A.getSize(), cudaMemcpyDeviceToDevice));
+  cudaFree(d_out);
+
   cudaDeviceSynchronize();
+}
+
+__global__ void ifftshift_2d_col_major_kernel(
+    const cuComplex* __restrict__ d_in, cuComplex* __restrict__ d_out, int H,
+    int W) {
+  // Coalescing Rule: threadIdx.x must handle the fastest-changing memory
+  // dimension. In Column-Major, this is the Row index.
+  int out_row = blockIdx.x * blockDim.x + threadIdx.x;
+  int out_col = blockIdx.y * blockDim.y + threadIdx.y;
+
+  // Grid boundary check
+  if (out_row < H && out_col < W) {
+    // 1. Calculate shift steps specifically for IFFTShift
+    // For ifftshift, the step size is exactly N / 2
+    int shift_row = H / 2;
+    int shift_col = W / 2;
+
+    // 2. Map Output index back to Input index
+    // (out + shift) % N wraps around periodically
+    int in_row = (out_row + shift_row) % H;
+    int in_col = (out_col + shift_col) % W;
+
+    // 3. Compute flat 1D addresses using Column-Major formula: (col * H + row)
+    int out_idx = out_col * H + out_row;
+    int in_idx = in_col * H + in_row;
+
+    // 4. Stream data through global memory lines
+    // Fully coalesced because out_row is directly tied to threadIdx.x
+    d_out[out_idx] = d_in[in_idx];
+  }
 }
 
 void ifftshift(XMux<ComplexMatrix>& A) {
@@ -66,7 +103,7 @@ void ifftshift(XMux<ComplexMatrix>& A) {
                  (A.getSize2() + block_size.y - 1) / block_size.y);
   void* d_tmp;
   CUDA_CHECK(cudaMalloc(&d_tmp, sizeof(ComplexMatrix::dtype) * A.getSize()));
-  ifftshift_2d_pow2_kernel<<<grid_size, block_size>>>(
+  ifftshift_2d_col_major_kernel<<<grid_size, block_size>>>(
       (const cuComplex*)A.device_data(), (cuComplex*)d_tmp, A.getSize1(),
       A.getSize2());
   CUDA_CHECK(cudaMemcpy(A.device_data(), d_tmp,
@@ -76,8 +113,8 @@ void ifftshift(XMux<ComplexMatrix>& A) {
   cudaDeviceSynchronize();
 }
 
-ComplexMatrix computeConvMat(const ComplexMatrix& eps_img,
-                                     int max_order_x, int max_order_y) {
+ComplexMatrix computeConvMat(const ComplexMatrix& eps_img, int max_order_x,
+                             int max_order_y) {
   size_t nx = eps_img.getSize1();
   size_t ny = eps_img.getSize2();
   ComplexMatrix F_eps = eps_img;
@@ -87,8 +124,8 @@ ComplexMatrix computeConvMat(const ComplexMatrix& eps_img,
   fftshift(mx_F_eps);
   mx_F_eps.to_cpu();
 
-  int kx_min = -nx/2;
-  int ky_min = -ny/2;
+  int kx_min = -nx / 2;
+  int ky_min = -ny / 2;
 
   int orders_x = 2 * max_order_x + 1;
   int orders_y = 2 * max_order_y + 1;
@@ -106,7 +143,6 @@ ComplexMatrix computeConvMat(const ComplexMatrix& eps_img,
       int idx_ky = (ky_out - ky_in) - ky_min;
 
       conv_mat[i][j] = F_eps[idx_kx][idx_ky];
-
     }
   }
 

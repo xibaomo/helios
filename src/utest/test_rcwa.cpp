@@ -9,6 +9,9 @@ using namespace std;
 static bool test_rcwa_homogeneous();
 static AddUnitTest t_rcwa_homo("test_rcwa_homogeneous", test_rcwa_homogeneous);
 
+static bool test_conv_mat();
+static AddUnitTest t_conv_mat("test_conv_mat", test_conv_mat);
+
 bool test_rcwa_homogeneous() {
   int max_order_x = 1;
   int max_order_y = 1;
@@ -62,5 +65,35 @@ bool test_rcwa_homogeneous() {
   cout << "TM power trn: " << endl;
   show_arr(rcwa.getPowerTransmissionsAllOrders());
 
+  return true;
+}
+
+bool test_conv_mat() {
+  int L = 400;
+  int a = 80;
+  Complex eps = Complex{2.612, -0.356};
+  eps = eps * eps;
+  ComplexMatrix eps_img(L, L);
+  eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f}; });
+  int s = L / 2 - a / 2;
+  for (int i = s; i < s + a; i++) {
+    for (int j = s; j < s + a; j++) {
+      eps_img[i][j] = eps;
+    }
+  }
+
+  ComplexMatrix cm = computeConvMat(eps_img, 1, 1);
+
+  cout << "Eps conv mat: " << endl;
+  show_arr(cm);
+
+  auto xm_cm = wrap_xmux(cm);
+  cout << "sum of eps_conv" << xm_cm.sum() << endl;
+
+  ComplexMatrix inv_eps = eps_img;
+  inv_eps.for_each([](Complex& a) { return 1.f/a;});
+  ComplexMatrix inv_cm = computeConvMat(inv_eps,1,1);
+  auto xm_inv_cm = wrap_xmux(inv_cm);
+  cout << "sum of inv eps: " << xm_inv_cm.sum() << endl;
   return true;
 }

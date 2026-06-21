@@ -23,8 +23,8 @@ static bool test_matmul();
 static AddUnitTest t_matmul("test_matmul", test_matmul);
 static bool test_fft2d();
 static AddUnitTest t_fft2d("test_fft2d", test_fft2d);
-static bool test_convmat();
-static AddUnitTest t_convmat("test_convmat",test_convmat);
+// static bool test_convmat();
+// static AddUnitTest t_convmat("test_convmat",test_convmat);
 
 static ComplexMatrix createMat(size_t N1, size_t N2,
                                Complex s = Complex{1.f, 0.f}) {
@@ -204,34 +204,38 @@ bool test_matmul() {
 }
 
 bool test_fft2d() {
-  ComplexMatrix a = createMat(N, N);
+  ComplexMatrix a = createMat(4, 4);
   auto xa = wrap_xmux(a);
 
   cout << "A: " << endl;
   show_arr2d(a);
   fft2d(xa);
-  fftshift(xa);
+  
   xa.to_cpu();
   cout << "fft2d: " << endl;
   show_arr2d(xa.cpu());
 
+  fftshift(xa);
+  cout << "fftshift: " << endl;
+  show_arr2d(xa.cpu());
+
   ifftshift(xa);
-  ifft2d(xa, 1.f / (N * N));
+  ifft2d(xa, 1.f / (4 * 4));
   cout << "ifft2d: " << endl;
   show_arr2d(xa.cpu());
 
   return true;
 }
 
-bool test_convmat() {
-  ComplexMatrix a = createMat(N*2,N*2);
-  a.for_each([](auto& x) { return x+ Complex{0.f, 1.f};});
-  // auto xa = wrap_xmux(a);
-  cout << "A: " << endl;
-  show_arr2d(a);
+// bool test_convmat() {
+//   ComplexMatrix a = createMat(N*2,N*2);
+//   a.for_each([](auto& x) { return x+ Complex{0.f, 1.f};});
+//   // auto xa = wrap_xmux(a);
+//   cout << "A: " << endl;
+//   show_arr2d(a);
 
-  ComplexMatrix cm = computeConvMat(a, 1, 1);
-  cout << "conv mat: " << endl;
-  show_arr2d(cm);
-  return true;
-}
+//   ComplexMatrix cm = computeConvMat(a, 1, 1);
+//   cout << "conv mat: " << endl;
+//   show_arr2d(cm);
+//   return true;
+// }

@@ -107,7 +107,5 @@ class XRcwa2D {
 
   ComplexVector getPowerReflectionsAllOrders();
   ComplexVector getPowerTransmissionsAllOrders();
-
-  //compute convolution matrix of epsilon. user may cahce it and reuse it
-  ConvMats epsImg2ConvMats(const ComplexMatrix& eps_img, int max_order);
 };
+
