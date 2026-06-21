@@ -16,6 +16,9 @@ static bool test_normal_vector_field();
 static AddUnitTest t_normal_field("test_normal_vector_field",
                                   test_normal_vector_field);
 
+static bool test_fff_eps();
+static AddUnitTest t_fff_eps("test_fff_eps", test_fff_eps);
+
 bool test_rcwa_homogeneous() {
   int max_order_x = 1;
   int max_order_y = 1;
@@ -104,14 +107,14 @@ bool test_conv_mat() {
 
 bool test_normal_vector_field() {
   int L = 400;
-  int a = 80;
+  int a = 200;
   Complex eps = Complex{2.612, -0.356};
   eps = eps * eps;
   ComplexMatrix eps_img(L, L);
   eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f}; });
   int s = L / 2 - a / 2;
   for (int i = s; i < s + a; i++) {
-    for (int j = s; j < s + a; j++) {
+    for (int j = s; j < s + a/2; j++) {
       eps_img[i][j] = eps;
     }
   }
@@ -139,5 +142,29 @@ bool test_normal_vector_field() {
   nyy.for_each([](Complex& a, Real b) { return Complex{b * b, 0.f}; }, ny);
   ComplexMatrix nyy_conv = computeConvMat(nyy, 1, 1);
   cout << "conv nyy sum: " << nyy_conv.sum() << endl;
+  return true;
+}
+
+bool test_fff_eps() {
+  int L = 400;
+  int a = 200;
+  Complex eps = Complex{2.612, -0.356};
+  eps = eps * eps;
+  ComplexMatrix eps_img(L, L);
+  eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f}; });
+  int s = L / 2 - a / 2;
+  for (int i = s; i < s + a; i++) {
+    for (int j = s; j < s + a/2; j++) {
+      eps_img[i][j] = eps;
+    }
+  }
+
+  auto fff_eps = computeFFFConvMat(eps_img,1,1,1,1);
+  auto& [eps_xx_conv,eps_xy_conv,eps_yy_conv] = fff_eps;
+
+  cout << "eps xx sum: " << eps_xx_conv.sum() << endl;
+  cout << "eps xy sum: " << eps_xy_conv.sum() << endl;
+  cout << "eps yy sum: " << eps_yy_conv.sum() << endl;
+
   return true;
 }

@@ -519,3 +519,62 @@ ComplexVector XRcwa2D::getPowerTransmissionsAllOrders() {
 
   return T.cpu();
 }
+
+std::tuple<ComplexMatrix, ComplexMatrix, ComplexMatrix>
+computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
+                           int max_order_x, int max_order_y) {
+  ComplexMatrix eps_conv = computeConvMat(eps_img, max_order_x, max_order_y);
+
+  ComplexMatrix inv_eps_img = eps_img;
+  inv_eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f} / a; });
+  ComplexMatrix inv_eps_conv =
+      computeConvMat(inv_eps_img, max_order_x, max_order_y);
+
+  auto nvf = generateNormalField(eps_img, dx, dy);  // nm
+  auto& [nvx, nvy] = nvf;
+  std::tuple<ComplexMatrix, ComplexMatrix, ComplexMatrix> eps_fff;
+  auto& [eps_xx_conv, eps_xy_conv, eps_yy_conv] = eps_fff;
+
+  ComplexMatrix nxx = eps_img;
+  nxx.for_each([](Complex& a, Real b) { return Complex{b * b, 0.f}; }, nvx);
+  ComplexMatrix nxx_conv = computeConvMat(nxx, max_order_x, max_order_y);
+
+  ComplexMatrix nxy = eps_img;
+  nxy.for_each([](Complex& a, Real b, Real c) { return Complex{b * c, 0.f}; },
+               nvx, nvy);
+  ComplexMatrix nxy_conv = computeConvMat(nxy, max_order_x, max_order_y);
+
+  ComplexMatrix nyy = eps_img;
+  nyy.for_each([](Complex& a, Real b) { return Complex{b * b, 0.f}; }, nvy);
+  ComplexMatrix nyy_conv = computeConvMat(nyy, max_order_x, max_order_y);
+
+  auto xm_inv_eps_conv = wrap_xmux(inv_eps_conv);
+  auto xm_eps_conv = wrap_xmux(eps_conv);
+  auto xm_nxx_conv = wrap_xmux(nxx_conv);
+  auto xm_nxy_conv = wrap_xmux(nxy_conv);
+  auto xm_nyy_conv = wrap_xmux(nyy_conv);
+  auto xm_eps_xx_conv = wrap_xmux(eps_xx_conv);
+  auto xm_eps_xy_conv = wrap_xmux(eps_xy_conv);
+  auto xm_eps_yy_conv = wrap_xmux(eps_yy_conv);
+
+  // deps = inv_eps - eps;
+  XMux<ComplexMatrix> d_eps_conv = xm_inv_eps_conv;
+  d_eps_conv.substract(xm_eps_conv);
+
+  // eps_xx = eps_conv + deps * nxx_conv
+  xm_eps_xx_conv = d_eps_conv * xm_nxx_conv;
+  xm_eps_xx_conv.add(xm_eps_conv);
+
+  // eps_xy = deps*nxy_conv
+  xm_eps_xy_conv = d_eps_conv * xm_nxy_conv;
+
+  // eps_yy = eps_conv + deps * nyy_conv
+  xm_eps_yy_conv = d_eps_conv * xm_nyy_conv;
+  xm_eps_yy_conv.add(xm_eps_conv);
+
+  xm_eps_xx_conv.to_cpu();
+  xm_eps_xy_conv.to_cpu();
+  xm_eps_yy_conv.to_cpu();
+
+  return eps_fff;
+}

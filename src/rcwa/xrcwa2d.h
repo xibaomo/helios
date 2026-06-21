@@ -108,4 +108,6 @@ class XRcwa2D {
   ComplexVector getPowerReflectionsAllOrders();
   ComplexVector getPowerTransmissionsAllOrders();
 };
-
+std::tuple<ComplexMatrix, ComplexMatrix, ComplexMatrix> computeFFFConvMat(
+    const ComplexMatrix& eps_img, Real dx, Real dy, int max_order_x,
+    int max_order_y);
