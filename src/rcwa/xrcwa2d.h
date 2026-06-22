@@ -80,7 +80,7 @@ class XRcwa2D {
           Real theta, Real phi, Complex& in_eps);
 
   void addUniformLayer(const Complex& eps, Real thickness);
-  void addPatternLayer(const FFFConvMats& eps, Real thickness);
+  void addPatternLayer(FFFConvMats& fff_mats, Real thickness);
 
   void buildSMat_reflection();
   void buildSMat_transmission();

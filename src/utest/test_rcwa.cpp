@@ -154,7 +154,7 @@ bool test_fff_eps() {
   eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f}; });
   int s = L / 2 - a / 2;
   for (int i = s; i < s + a; i++) {
-    for (int j = s; j < s + a/2; j++) {
+    for (int j = s; j < s + a; j++) {
       eps_img[i][j] = eps;
     }
   }

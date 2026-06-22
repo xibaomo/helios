@@ -527,8 +527,7 @@ FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
 
   ComplexMatrix inv_eps_img = eps_img;
   inv_eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f} / a; });
-  inv_eps_conv =
-      computeConvMat(inv_eps_img, max_order_x, max_order_y);
+  inv_eps_conv = computeConvMat(inv_eps_img, max_order_x, max_order_y);
 
   auto nvf = generateNormalField(eps_img, dx, dy);  // nm
   auto& [nvx, nvy] = nvf;
@@ -579,4 +578,77 @@ FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
   return fff_mats;
 }
 
-void XRcwa2D::addPatternLayer(const FFFConvMats& fff_mats, Real thickness) {}
+void XRcwa2D::addPatternLayer(FFFConvMats& fff_mats, Real thickness) {
+  auto xm_eps_conv = wrap_xmux(fff_mats.eps_conv);
+  auto xm_inv_eps_conv = wrap_xmux(fff_mats.inv_eps_conv);
+  auto xm_eps_xx_conv = wrap_xmux(fff_mats.eps_xx_conv);
+  auto xm_eps_xy_conv = wrap_xmux(fff_mats.eps_xy_conv);
+  auto xm_eps_yy_conv = wrap_xmux(fff_mats.eps_yy_conv);
+
+  auto xKx = wrap_xmux(m_Kx_norm);
+  auto xKy = wrap_xmux(m_Ky_norm);
+
+  XMux<ComplexMatrix> I0 = xKx;
+  I0.eye();
+
+  auto P11 = xKx * xm_inv_eps_conv * xKy;
+  auto P12 = I0;
+  auto tmp = xKx * xm_inv_eps_conv * xKx;
+  P12.substract(tmp);
+  auto P21 = xKy * xm_inv_eps_conv * xKy;
+  P21.substract(I0);
+  auto P22 = I0;
+  P22.zero();
+  tmp = xKy * xm_inv_eps_conv * xKx;
+  P22.substract(tmp);
+
+  // construct P
+  const int N = P11.getSize1();
+  XMux<ComplexMatrix> P(N * 2, N * 2);
+  P.fillBlock(0, 0, P11);
+  P.fillBlock(0, N, P12);
+  P.fillBlock(N, 0, P21);
+  P.fillBlock(N, N, P22);
+
+  // construct Q
+  auto Q11 = xKx * xKy;
+  Q11.add(xm_eps_xy_conv);
+  auto Q12 = xm_eps_yy_conv;
+  Q12.substract(xKx * xKx);
+  auto Q21 = xKy * xKy;
+  Q21.substract(xm_eps_xx_conv);
+  XMux<ComplexMatrix> Q22(N, N);
+  Q22.zero();
+  Q22.substract(xKy * xKx);
+  Q22.substract(xm_eps_xy_conv);
+  XMux<ComplexMatrix> Q(N * 2, N * 2);
+  Q.fillBlock(0, 0, Q11);
+  Q.fillBlock(0, N, Q12);
+  Q.fillBlock(N, 0, Q21);
+  Q.fillBlock(N, N, Q22);
+
+  auto OMEGA2 = P * Q;
+
+  ComplexMatrix W;
+  auto xW = wrap_xmux(W);
+  XMux<ComplexVector> LAM;
+
+  eig_gpu(OMEGA2, LAM, xW);
+  auto& lam = LAM.cpu();
+  ComplexMatrix lam_mat(N, N);
+  lam_mat.zero();
+  for (size_t i = 0; i < N; i++) {
+    lam_mat[i][i] = std::sqrt(lam[i]);
+  }
+  auto xm_lam = wrap_xmux(lam_mat);
+  auto B = Q * xW;
+  ComplexMatrix V(N, N);
+  auto xV = wrap_xmux(V);
+  linsolve_right_gpu(xm_lam, B, xV);
+  xV.to_cpu();
+  xW.to_cpu();
+
+  SMat sm = createLayerSmat(W, V, lam_mat, thickness);
+
+  m_global_smat = redheffer(m_global_smat, sm);
+}
