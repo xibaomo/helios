@@ -22,7 +22,13 @@ struct SMat {
   }
 };  // SMat of a layer is usually symmetric, but overall Smat is not.
 
-typedef std::tuple<ComplexMatrix, ComplexMatrix> ConvMats;
+struct FFFConvMats {
+  ComplexMatrix eps_conv;
+  ComplexMatrix inv_eps_conv;
+  ComplexMatrix eps_xx_conv;
+  ComplexMatrix eps_xy_conv;
+  ComplexMatrix eps_yy_conv;
+};
 class XRcwa2D {
  private:
   Real m_lambda;
@@ -74,7 +80,7 @@ class XRcwa2D {
           Real theta, Real phi, Complex& in_eps);
 
   void addUniformLayer(const Complex& eps, Real thickness);
-  void addPatternLayer(const Array2D<Complex>& eps, Real thickness);
+  void addPatternLayer(const FFFConvMats& eps, Real thickness);
 
   void buildSMat_reflection();
   void buildSMat_transmission();
@@ -108,6 +114,5 @@ class XRcwa2D {
   ComplexVector getPowerReflectionsAllOrders();
   ComplexVector getPowerTransmissionsAllOrders();
 };
-std::tuple<ComplexMatrix, ComplexMatrix, ComplexMatrix> computeFFFConvMat(
-    const ComplexMatrix& eps_img, Real dx, Real dy, int max_order_x,
-    int max_order_y);
+FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
+                              int max_order_x, int max_order_y);

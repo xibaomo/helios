@@ -363,8 +363,6 @@ void XRcwa2D::buildGlobalSMat() {
   buildSMat_transmission();
 }
 
-void XRcwa2D::addPatternLayer(const Array2D<Complex>& eps, Real thickness) {}
-
 SMat XRcwa2D::redheffer(SMat& a, SMat& b) {
   SMat res;
   XMux<ComplexMatrix> I0 = a.s11;
@@ -520,14 +518,16 @@ ComplexVector XRcwa2D::getPowerTransmissionsAllOrders() {
   return T.cpu();
 }
 
-std::tuple<ComplexMatrix, ComplexMatrix, ComplexMatrix>
-computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
-                           int max_order_x, int max_order_y) {
-  ComplexMatrix eps_conv = computeConvMat(eps_img, max_order_x, max_order_y);
+FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
+                              int max_order_x, int max_order_y) {
+  FFFConvMats fff_mats;
+  auto& eps_conv = fff_mats.eps_conv;
+  auto& inv_eps_conv = fff_mats.inv_eps_conv;
+  eps_conv = computeConvMat(eps_img, max_order_x, max_order_y);
 
   ComplexMatrix inv_eps_img = eps_img;
   inv_eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f} / a; });
-  ComplexMatrix inv_eps_conv =
+  inv_eps_conv =
       computeConvMat(inv_eps_img, max_order_x, max_order_y);
 
   auto nvf = generateNormalField(eps_img, dx, dy);  // nm
@@ -553,9 +553,9 @@ computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
   auto xm_nxx_conv = wrap_xmux(nxx_conv);
   auto xm_nxy_conv = wrap_xmux(nxy_conv);
   auto xm_nyy_conv = wrap_xmux(nyy_conv);
-  auto xm_eps_xx_conv = wrap_xmux(eps_xx_conv);
-  auto xm_eps_xy_conv = wrap_xmux(eps_xy_conv);
-  auto xm_eps_yy_conv = wrap_xmux(eps_yy_conv);
+  auto xm_eps_xx_conv = wrap_xmux(fff_mats.eps_xx_conv);
+  auto xm_eps_xy_conv = wrap_xmux(fff_mats.eps_xy_conv);
+  auto xm_eps_yy_conv = wrap_xmux(fff_mats.eps_yy_conv);
 
   // deps = inv_eps - eps;
   XMux<ComplexMatrix> d_eps_conv = xm_inv_eps_conv;
@@ -576,5 +576,7 @@ computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
   xm_eps_xy_conv.to_cpu();
   xm_eps_yy_conv.to_cpu();
 
-  return eps_fff;
+  return fff_mats;
 }
+
+void XRcwa2D::addPatternLayer(const FFFConvMats& fff_mats, Real thickness) {}

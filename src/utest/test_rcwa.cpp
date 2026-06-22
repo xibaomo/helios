@@ -160,11 +160,12 @@ bool test_fff_eps() {
   }
 
   auto fff_eps = computeFFFConvMat(eps_img,1,1,1,1);
-  auto& [eps_xx_conv,eps_xy_conv,eps_yy_conv] = fff_eps;
 
-  cout << "eps xx sum: " << eps_xx_conv.sum() << endl;
-  cout << "eps xy sum: " << eps_xy_conv.sum() << endl;
-  cout << "eps yy sum: " << eps_yy_conv.sum() << endl;
+  cout << "eps_conv sum: " << fff_eps.eps_conv.sum() << endl;
+  cout << "inv eps conv sum: " << fff_eps.inv_eps_conv.sum() << endl;
+  cout << "eps xx sum: " << fff_eps.eps_xx_conv.sum() << endl;
+  cout << "eps xy sum: " << fff_eps.eps_xy_conv.sum() << endl;
+  cout << "eps yy sum: " << fff_eps.eps_yy_conv.sum() << endl;
 
   return true;
 }
