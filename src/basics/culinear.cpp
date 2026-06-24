@@ -5,12 +5,15 @@
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include <cusolverDn.h>
+#include <cassert>
 
 void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
              XMux<ComplexMatrix>& W) {
+  assert(lambda.getSize() > 0 && W.getSize() > 0);
   A.to_gpu();
   lambda.to_gpu();
   W.to_gpu();
+  const int N = A.getSize1();
 
   auto& handle = CuHandleMgr::getInstance().getCuSolverHandle();
   cusolverDnParams_t params;
@@ -20,7 +23,6 @@ void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
   cuComplex* d_A = const_cast<cuComplex*>(d_pA);
 
   int* d_info;
-  int N = (int)A.getSize1();
 
   CUDA_CHECK(cudaMalloc(&d_info, sizeof(int)));
   cuComplex* d_lam = (cuComplex*)lambda.device_data();
@@ -69,6 +71,7 @@ void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
   cudaFree(d_work);
   free(h_work);
   CUSOLVER_CHECK(cusolverDnDestroyParams(params));
+  A.touchCPU();
 }
 
 void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
@@ -76,11 +79,13 @@ void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
   A.to_gpu();
   b.to_gpu();
   if (x.getSize() == 0) {
-    x = b; //on gpu
+    x = b;  // on gpu
     x.zero();
   }
   XMux<ComplexMatrix> B(b.getSize(), 1);
-  CUDA_CHECK(cudaMemcpy(B.device_data(), b.device_data(), sizeof(cuComplex)*b.getSize(), cudaMemcpyDeviceToDevice));
+  CUDA_CHECK(cudaMemcpy(B.device_data(), b.device_data(),
+                        sizeof(cuComplex) * b.getSize(),
+                        cudaMemcpyDeviceToDevice));
 
   XMux<ComplexMatrix> X;
   linsolve_mat_gpu(A, B, X);

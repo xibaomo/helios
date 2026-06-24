@@ -388,8 +388,8 @@ class XMux : public OptionalDim<Arr> {
     }
   }
 
-  void touchGPU() { m_dev = Device::__gpu__; }
-  void touchCPU() { m_dev = Device::__cpu__; }
+  void touchGPU() const { m_dev = Device::__gpu__; }
+  void touchCPU() const { m_dev = Device::__cpu__; }
 
   void add(const XMux<Arr>& other);
   void substract(const XMux<Arr>& other);

@@ -629,20 +629,23 @@ void XRcwa2D::addPatternLayer(FFFConvMats& fff_mats, Real thickness) {
 
   auto OMEGA2 = P * Q;
 
-  ComplexMatrix W;
+  ComplexMatrix W(2 * N, 2 * N);
   auto xW = wrap_xmux(W);
-  XMux<ComplexVector> LAM;
 
-  eig_gpu(OMEGA2, LAM, xW);
-  auto& lam = LAM.cpu();
-  ComplexMatrix lam_mat(N, N);
+  ComplexVector Lam(N * 2);
+  auto xLam = wrap_xmux(Lam);
+
+  eig_gpu(OMEGA2, xLam, xW);
+  xLam.to_cpu();
+
+  ComplexMatrix lam_mat(N*2, N*2);
   lam_mat.zero();
-  for (size_t i = 0; i < N; i++) {
-    lam_mat[i][i] = std::sqrt(lam[i]);
+  for (size_t i = 0; i < N*2; i++) {
+    lam_mat[i][i] = std::sqrt(Lam[i]);
   }
   auto xm_lam = wrap_xmux(lam_mat);
   auto B = Q * xW;
-  ComplexMatrix V(N, N);
+  ComplexMatrix V(N*2, N*2);
   auto xV = wrap_xmux(V);
   linsolve_right_gpu(xm_lam, B, xV);
   xV.to_cpu();

@@ -19,6 +19,10 @@ static AddUnitTest t_normal_field("test_normal_vector_field",
 static bool test_fff_eps();
 static AddUnitTest t_fff_eps("test_fff_eps", test_fff_eps);
 
+static bool test_rcwa_patterned_layer();
+static AddUnitTest t_rcwa_2_layers("test_rcwa_2_layers",
+                                   test_rcwa_patterned_layer);
+
 bool test_rcwa_homogeneous() {
   int max_order_x = 1;
   int max_order_y = 1;
@@ -38,6 +42,82 @@ bool test_rcwa_homogeneous() {
   Complex eps_in = n_inc * n_inc;
   XRcwa2D rcwa(lambda, L, L, max_order_x, max_order_y, theta, phi, eps_in);
   rcwa.addUniformLayer(eps_in, 200.f);
+  rcwa.buildGlobalSMat();
+
+  rcwa.setSourcePolarization(0);
+
+  ComplexVector r = rcwa.getReflectionXY();
+  ComplexVector t = rcwa.getTransmissionXY();
+
+  cout << "TE ref: " << endl;
+  show_arr(r);
+  cout << "TE trn: " << endl;
+  show_arr(t);
+
+  cout << "TE power ref: " << endl;
+  show_arr(rcwa.getPowerReflectionsAllOrders());
+
+  cout << "TE power trn: " << endl;
+  show_arr(rcwa.getPowerTransmissionsAllOrders());
+
+  rcwa.setSourcePolarization(1);
+
+  r = rcwa.getReflectionXY();
+  t = rcwa.getTransmissionXY();
+
+  cout << "TM ref: " << endl;
+  show_arr(r);
+  cout << "TM trn: " << endl;
+  show_arr(t);
+
+  cout << "TM power ref: " << endl;
+  show_arr(rcwa.getPowerReflectionsAllOrders());
+
+  cout << "TM power trn: " << endl;
+  show_arr(rcwa.getPowerTransmissionsAllOrders());
+
+  return true;
+}
+
+bool test_rcwa_patterned_layer() {
+  int max_order_x = 1;
+  int max_order_y = 1;
+
+  Real lambda = 193.f;
+  Real alpha = 0.78f;
+  Real beta = 0.f;  // source point coordinate, in unit of NA
+  Real NA = 1.35;
+  Real n_inc = 1.563;  // incident medium refractive index: SiO2 glass
+
+  Real k0 = 2 * PI / lambda;
+  Real sin_theta = NA / 4 * sqrt(alpha * alpha + beta * beta);  // incident
+                                                                // angle
+  Real theta = asin(sin_theta);
+  Real phi = PI / 3.f;  // azimuthal angle
+  Complex eps_in = n_inc * n_inc;
+
+  //pattern
+  int L = 400;
+  int a = 200;
+  Complex eps = Complex{2.612, -0.356};
+  eps = eps * eps;
+  ComplexMatrix eps_img(L, L);
+  eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f}; });
+  int s = L / 2 - a / 2;
+  for (int i = s; i < s + a; i++) {
+    for (int j = s; j < s + a; j++) {
+      eps_img[i][j] = eps;
+    }
+  }
+
+  XRcwa2D rcwa(lambda, L, L, max_order_x, max_order_y, theta, phi, eps_in);
+  //1st layer
+  rcwa.addUniformLayer(eps_in, 200.f);
+
+  //2nd layer
+  auto fff_mats = computeFFFConvMat(eps_img,1,1,1,1);
+  rcwa.addPatternLayer(fff_mats,56.f);
+  
   rcwa.buildGlobalSMat();
 
   rcwa.setSourcePolarization(0);
@@ -114,7 +194,7 @@ bool test_normal_vector_field() {
   eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f}; });
   int s = L / 2 - a / 2;
   for (int i = s; i < s + a; i++) {
-    for (int j = s; j < s + a/2; j++) {
+    for (int j = s; j < s + a / 2; j++) {
       eps_img[i][j] = eps;
     }
   }
@@ -159,7 +239,7 @@ bool test_fff_eps() {
     }
   }
 
-  auto fff_eps = computeFFFConvMat(eps_img,1,1,1,1);
+  auto fff_eps = computeFFFConvMat(eps_img, 1, 1, 1, 1);
 
   cout << "eps_conv sum: " << fff_eps.eps_conv.sum() << endl;
   cout << "inv eps conv sum: " << fff_eps.inv_eps_conv.sum() << endl;
