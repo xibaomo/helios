@@ -4,8 +4,8 @@
 #include "utils.h"
 
 // CUDA Kernel for 2D FFTShift (Optimized for Column-Major Layout)
-__global__ void fftshift_2d_col_major_kernel(const cuComplex* __restrict__ d_in,
-                                             cuComplex* __restrict__ d_out,
+__global__ void fftshift_2d_col_major_kernel(const CUDA_COMPLEX* __restrict__ d_in,
+                                             CUDA_COMPLEX* __restrict__ d_out,
                                              int H, int W) {
   // CRITICAL: threadIdx.x must map to the Row (fastest-changing index in
   // memory)
@@ -39,7 +39,7 @@ void fftshift(XMux<ComplexMatrix>& A) {
   A.to_gpu();
   void* d_out;
   void* d_in = A.device_data();
-  CUDA_CHECK(cudaMalloc(&d_out, sizeof(cuComplex) * A.getSize()));
+  CUDA_CHECK(cudaMalloc(&d_out, sizeof(CUDA_COMPLEX) * A.getSize()));
   dim3 blockDim(32, 16);
   int H = A.getSize1();
   int W = A.getSize2();
@@ -50,7 +50,7 @@ void fftshift(XMux<ComplexMatrix>& A) {
 
   // Launch the Out-of-Place shift kernel
   fftshift_2d_col_major_kernel<<<gridDim, blockDim, 0, 0>>>(
-      (cuComplex*)d_in, (cuComplex*)d_out, H, W);
+      (CUDA_COMPLEX*)d_in, (CUDA_COMPLEX*)d_out, H, W);
 
   // Synchronous/Asynchronous error checking
   cudaError_t err = cudaGetLastError();
@@ -59,7 +59,7 @@ void fftshift(XMux<ComplexMatrix>& A) {
               << cudaGetErrorString(err) << std::endl;
   }
 
-  CUDA_CHECK(cudaMemcpy(d_in, d_out, sizeof(cuComplex) * A.getSize(),
+  CUDA_CHECK(cudaMemcpy(d_in, d_out, sizeof(CUDA_COMPLEX) * A.getSize(),
                         cudaMemcpyDeviceToDevice));
   cudaFree(d_out);
 
@@ -67,7 +67,7 @@ void fftshift(XMux<ComplexMatrix>& A) {
 }
 
 __global__ void ifftshift_2d_col_major_kernel(
-    const cuComplex* __restrict__ d_in, cuComplex* __restrict__ d_out, int H,
+    const CUDA_COMPLEX* __restrict__ d_in, CUDA_COMPLEX* __restrict__ d_out, int H,
     int W) {
   // Coalescing Rule: threadIdx.x must handle the fastest-changing memory
   // dimension. In Column-Major, this is the Row index.
@@ -106,7 +106,7 @@ void ifftshift(XMux<ComplexMatrix>& A) {
   void* d_tmp;
   CUDA_CHECK(cudaMalloc(&d_tmp, sizeof(ComplexMatrix::dtype) * A.getSize()));
   ifftshift_2d_col_major_kernel<<<grid_size, block_size>>>(
-      (const cuComplex*)A.device_data(), (cuComplex*)d_tmp, A.getSize1(),
+      (const CUDA_COMPLEX*)A.device_data(), (CUDA_COMPLEX*)d_tmp, A.getSize1(),
       A.getSize2());
   CUDA_CHECK(cudaMemcpy(A.device_data(), d_tmp,
                         sizeof(ComplexMatrix::dtype) * A.getSize(),
@@ -162,7 +162,7 @@ struct Real2 {
 // Layout: Optimized for Column-Major matrix memory alignment
 // ============================================================================
 __global__ void compute_gradient_2d_sobel_kernel(
-    const cuComplex* __restrict__ d_in, Real2* __restrict__ d_gradients, int H,
+    const CUDA_COMPLEX* __restrict__ d_in, Real2* __restrict__ d_gradients, int H,
     int W, Real dx, Real dy) {
   // Coalescing Rule: threadIdx.x must handle the contiguous row index (i)
   // to achieve perfect memory coalescing in Column-Major layout.
@@ -175,7 +175,7 @@ __global__ void compute_gradient_2d_sobel_kernel(
     auto get_height = [&](int r, int c) -> Real {
       r = max(0, min(r, H - 1));
       c = max(0, min(c, W - 1));
-      return cuCabsf(
+      return cu_abs(
           d_in[c * H + r]);  // Column-Major flat indexing: col * H + row
     };
 
@@ -245,7 +245,7 @@ std::tuple<RealMatrix, RealMatrix> generateNormalField(
   CUDA_CHECK(cudaMalloc(&d_normals, sizeof(Real2) * H * W));
 
   compute_gradient_2d_sobel_kernel<<<gridDim, blockDim, 0, 0>>>(
-      (cuComplex*)d_in, (Real2*)d_normals, H, W, dx, dy);
+      (CUDA_COMPLEX*)d_in, (Real2*)d_normals, H, W, dx, dy);
 
   // ??????
   cudaError_t err = cudaGetLastError();

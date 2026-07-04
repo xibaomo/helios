@@ -180,7 +180,6 @@ class Array2D : public Array1D<T> {
     }
   }
 };
-typedef std::complex<float> Complex;
 
 template class Array2D<int>;
 template class Array2D<float>;

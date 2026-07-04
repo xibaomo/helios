@@ -178,7 +178,7 @@ bool test_conv_mat() {
   cout << "sum of eps_conv" << xm_cm.sum() << endl;
 
   ComplexMatrix inv_eps = eps_img;
-  inv_eps.for_each([](Complex& a) { return 1.f / a; });
+  inv_eps.for_each([](Complex& a) { return COMPLEX_ONE / a; });
   ComplexMatrix inv_cm = computeConvMat(inv_eps, 1, 1);
   auto xm_inv_cm = wrap_xmux(inv_cm);
   cout << "sum of inv eps: " << xm_inv_cm.sum() << endl;

@@ -17,7 +17,8 @@
 
 template <typename T>
 void transpose_gpu(int m, int n, T* d_A, T* d_B) {
-  if constexpr (!std::is_same_v<T, cuComplex> && !std::is_same_v<T, Complex>) {
+  if constexpr (!std::is_same_v<T, CUDA_COMPLEX> &&
+                !std::is_same_v<T, Complex>) {
     std::cerr << "transpose not implemented for non-Complex" << std::endl;
     return;
   }
@@ -26,33 +27,34 @@ void transpose_gpu(int m, int n, T* d_A, T* d_B) {
   void* d_b = nullptr;
   if (d_B == d_A) {
     // need extra buffer
-    CUDA_CHECK(cudaMalloc(&d_b, sizeof(cuComplex) * m * n));
+    CUDA_CHECK(cudaMalloc(&d_b, sizeof(CUDA_COMPLEX) * m * n));
   } else {
     d_b = d_B;
   }
 
-  // exmaple, convert A=[1,2,3;4,5,6] from row-major 2x3 to col-major 2x3, so
-  // m=2, n=3.
-  // After copy from host to device, cublas takes A as col-major, so n
-  // is the leading dim of A. in other words, in the eye of cublas,
-  //  A is [1,4;
-  //        2,5;
-  //        3,6], then transpose can give 2x3 col-major we want
-  // if still take m as A's leading dim, it gives wrong result.
-  CUBLAS_CHECK(cublasCgeam(handle,
+// exmaple, convert A=[1,2,3;4,5,6] from row-major 2x3 to col-major 2x3, so
+// m=2, n=3.
+// After copy from host to device, cublas takes A as col-major, so n
+// is the leading dim of A. in other words, in the eye of cublas,
+//  A is [1,4;
+//        2,5;
+//        3,6], then transpose can give 2x3 col-major we want
+// if still take m as A's leading dim, it gives wrong result.
+  CUBLAS_CHECK(cublas_geam(handle,
                            CUBLAS_OP_T,  // transpose A
                            CUBLAS_OP_N,  // no op for b
                            m,            // 1st dim of C
                            n,            // 2nd dim of C
-                           &CUCOMPLEX_ONE, (cuComplex*)d_A,
+                           &CUCOMPLEX_ONE, (CUDA_COMPLEX*)d_A,
                            n,  // leading dim of A in cublas' eye
                            &CUCOMPLEX_ZERO, nullptr,
                            m,  // B is ignored since beta=0
-                           (cuComplex*)d_b,
+                           (CUDA_COMPLEX*)d_b,
                            m  // leading dim of C
                            ));
+
   if (d_B == d_A) {
-    CUDA_CHECK(cudaMemcpy(d_A, d_b, sizeof(cuComplex) * m * n,
+    CUDA_CHECK(cudaMemcpy(d_A, d_b, sizeof(CUDA_COMPLEX) * m * n,
                           cudaMemcpyDeviceToDevice));
     cudaFree(d_b);
   }
@@ -82,7 +84,7 @@ struct DeviceTypeTraits<double> {
 };
 template <>
 struct DeviceTypeTraits<std::complex<float>> {
-  using type = cuComplex;
+  using type = CUDA_COMPLEX;
 };
 template <>
 struct DeviceTypeTraits<std::complex<double>> {
@@ -378,7 +380,8 @@ class XMux : public OptionalDim<Arr> {
       size_t dpitch = isize * sizeof(dev_dtype);
 
       // start position in big matrix
-      dev_dtype* d_A_start = (dev_dtype*)this->m_device_data + (jstart * this->m_size1 + istart);
+      dev_dtype* d_A_start =
+          (dev_dtype*)this->m_device_data + (jstart * this->m_size1 + istart);
 
       CUDA_CHECK(cudaMemcpy2D(d_sub, dpitch, d_A_start,
                               spitch,  // width_bytes

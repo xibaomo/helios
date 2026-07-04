@@ -1,5 +1,3 @@
-#include <cuComplex.h>
-
 #include <cassert>
 
 #include "xmux.h"
@@ -24,12 +22,12 @@ __global__ void set_diagonal_grid_stride_kernel(T* __restrict__ matrix, U value,
   // 3. Loop across the data jumping by 'stride' each iteration
   for (int idx = start_idx; idx < cols; idx += stride) {
     int diagonal_offset = idx * cols + idx;
-    if constexpr (std::is_same_v<T, cuComplex> && std::is_same_v<U, float>)
-      matrix[diagonal_offset] = make_cuComplex(value, 0.f);
+    if constexpr (std::is_same_v<T, CUDA_COMPLEX> && std::is_same_v<U, float>)
+      matrix[diagonal_offset] = make_cuda_complex(value, 0.f);
     if constexpr (std::is_same_v<T, float> && std::is_same_v<U, float>)
       matrix[diagonal_offset] = value;
-    if constexpr (std::is_same_v<T, cuComplex> && std::is_same_v<U, Complex>)
-      matrix[diagonal_offset] = make_cuComplex(value.real(), value.imag());
+    if constexpr (std::is_same_v<T, CUDA_COMPLEX> && std::is_same_v<U, Complex>)
+      matrix[diagonal_offset] = make_cuda_complex(value.real(), value.imag());
   }
 }
 
@@ -60,15 +58,15 @@ template <typename Arr>
 void XMux<Arr>::add(const XMux<Arr>& other) {
   auto op = [] __device__(auto& a, auto& b) {
     using T = std::decay_t<decltype(a)>;
-    if constexpr (std::is_same_v<T, cuComplex>) {
-      return cuCaddf(a, b);
+    if constexpr (std::is_same_v<T, CUDA_COMPLEX>) {
+      return cu_add(a, b);
     } else {
       return a + b;
     }
   };
-  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (CUDA_COMPLEX*)m_device_data,
                                           (int)m_size,
-                                          (cuComplex*)other.device_data());
+                                          (CUDA_COMPLEX*)other.device_data());
   cudaDeviceSynchronize();
 }
 
@@ -76,15 +74,15 @@ template <typename Arr>
 void XMux<Arr>::substract(const XMux<Arr>& other) {
   auto op = [] __device__(auto& a, auto& b) {
     using T = std::decay_t<decltype(a)>;
-    if constexpr (std::is_same_v<T, cuComplex>) {
-      return cuCsubf(a, b);
+    if constexpr (std::is_same_v<T, CUDA_COMPLEX>) {
+      return cu_sub(a, b);
     } else {
       return a - b;
     }
   };
-  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (CUDA_COMPLEX*)m_device_data,
                                           (int)m_size,
-                                          (cuComplex*)other.device_data());
+                                          (CUDA_COMPLEX*)other.device_data());
   cudaDeviceSynchronize();
 }
 
@@ -97,8 +95,8 @@ void XMux<Arr>::scale(Real s) {
 
   auto op = [s] __device__(auto& a) {
     using T = std::decay_t<decltype(a)>;
-    if constexpr (std::is_same_v<T, cuComplex>) {
-      cuComplex f = make_cuComplex(cuCrealf(a) * s, cuCimagf(a) * s);
+    if constexpr (std::is_same_v<T, CUDA_COMPLEX>) {
+      CUDA_COMPLEX f = make_cuda_complex(cu_real(a) * s, cu_imag(a) * s);
       return f;
     } else {
       // float/double
@@ -106,7 +104,7 @@ void XMux<Arr>::scale(Real s) {
     }
   };
 
-  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (CUDA_COMPLEX*)m_device_data,
                                           (int)m_size);
   cudaDeviceSynchronize();
 }
@@ -119,26 +117,26 @@ void XMux<Arr>::scale(Complex s) {
     std::cerr << "scale on cpu not supported. Complex" << std::endl;
   }
   // using T = typename Arr::dtype;
-  cuComplex g_s = make_cuComplex(s.real(), s.imag());
+  CUDA_COMPLEX g_s = make_cuda_complex(s.real(), s.imag());
 
   auto op = [g_s] __device__(auto& a) {
     using T = std::decay_t<decltype(a)>;
-    if constexpr (std::is_same_v<T, cuComplex>) {
-      cuComplex f = cuCmulf(a, g_s);
+    if constexpr (std::is_same_v<T, CUDA_COMPLEX>) {
+      CUDA_COMPLEX f = cu_mul(a, g_s);
       return f;
     }
   };
 
-  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (CUDA_COMPLEX*)m_device_data,
                                           (int)m_size);
   cudaDeviceSynchronize();
 }
 
 template <typename Arr>
 void XMux<Arr>::ones() {
-  auto op = [] __device__(cuComplex a) { return make_cuComplex(1.f, 0.f); };
+  auto op = [] __device__(CUDA_COMPLEX a) { return make_cuda_complex(1.f, 0.f); };
 
-  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (cuComplex*)m_device_data,
+  ops_each_knl<<<GRID_SIZE, BLOCK_SIZE>>>(op, (CUDA_COMPLEX*)m_device_data,
                                           (int)m_size);
   cudaDeviceSynchronize();
 
