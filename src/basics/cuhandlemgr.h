@@ -45,7 +45,7 @@ class CuHandleMgr {
 
  public:
   static CuHandleMgr& getInstance() {
-    static CuHandleMgr _ins;
+    thread_local CuHandleMgr _ins;
     return _ins;
   }
 
@@ -67,7 +67,7 @@ class CuHandleMgr {
       return h;
     } catch (...) {
       cufftHandle plan;
-      cufftPlan2d(&plan, n1, n2, CUFFT_C2C);
+      cufftPlan2d(&plan, n1, n2, CUFFT_TYPE);
       m_fftPlans[key] = std::move(plan);
     }
     return m_fftPlans[key];

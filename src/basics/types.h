@@ -1,6 +1,7 @@
 #pragma once
 #include <cuComplex.h>
 #include <library_types.h>
+#include <cufft.h>
 
 #include <complex>
 #include <cstring>
@@ -11,11 +12,12 @@
 #include <unordered_map>
 #include <vector>
 
-#define USE_32_BIT
+// #define USE_32_BIT
 
 #ifdef USE_32_BIT
 typedef float Real;
 inline const cudaDataType_t CUDA_C_DATATYPE = CUDA_C_32F;
+inline const cufftType_t CUFFT_TYPE = CUFFT_C2C;
 typedef cuComplex CUDA_COMPLEX;
 #define make_cuda_complex make_cuComplex
 #define cublas_geam cublasCgeam
@@ -31,6 +33,7 @@ typedef cuComplex CUDA_COMPLEX;
 #else
 typedef double Real;
 inline const cudaDataType_t CUDA_C_DATATYPE = CUDA_C_64F;
+inline const cufftType_t CUFFT_TYPE = CUFFT_Z2Z;
 typedef cuDoubleComplex CUDA_COMPLEX;
 #define make_cuda_complex make_cuDoubleComplex
 #define cublas_geam cublasZgeam
