@@ -82,6 +82,7 @@ void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
     x = b;  // on gpu
     x.zero();
   }
+  x.to_gpu();
   XMux<ComplexMatrix> B(b.getSize(), 1);
   CUDA_CHECK(cudaMemcpy(B.device_data(), b.device_data(),
                         sizeof(CUDA_COMPLEX) * b.getSize(),

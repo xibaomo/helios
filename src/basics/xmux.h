@@ -32,14 +32,14 @@ void transpose_gpu(int m, int n, T* d_A, T* d_B) {
     d_b = d_B;
   }
 
-// exmaple, convert A=[1,2,3;4,5,6] from row-major 2x3 to col-major 2x3, so
-// m=2, n=3.
-// After copy from host to device, cublas takes A as col-major, so n
-// is the leading dim of A. in other words, in the eye of cublas,
-//  A is [1,4;
-//        2,5;
-//        3,6], then transpose can give 2x3 col-major we want
-// if still take m as A's leading dim, it gives wrong result.
+  // exmaple, convert A=[1,2,3;4,5,6] from row-major 2x3 to col-major 2x3, so
+  // m=2, n=3.
+  // After copy from host to device, cublas takes A as col-major, so n
+  // is the leading dim of A. in other words, in the eye of cublas,
+  //  A is [1,4;
+  //        2,5;
+  //        3,6], then transpose can give 2x3 col-major we want
+  // if still take m as A's leading dim, it gives wrong result.
   CUBLAS_CHECK(cublas_geam(handle,
                            CUBLAS_OP_T,  // transpose A
                            CUBLAS_OP_N,  // no op for b
@@ -96,9 +96,10 @@ class XMux : public OptionalDim<Arr> {
  private:
   std::unique_ptr<Arr> m_own_cpu;
   Arr* const m_cpu;  // bound to an address, but content may change
-  mutable void* m_device_data = nullptr;  
+  mutable void* m_device_data = nullptr;
   size_t m_size;
   mutable Device m_dev = Device::__gpu__;
+  mutable bool m_isDevTrans = false;
 
   static bool is_internal(const XMux& other) {
     return other.m_own_cpu && (other.m_cpu == other.m_own_cpu.get());
@@ -116,7 +117,8 @@ class XMux : public OptionalDim<Arr> {
         m_cpu(m_own_cpu.get()),
         m_dev(Device::__gpu__),
         m_size(0),
-        m_device_data(nullptr) {
+        m_device_data(nullptr),
+        m_isDevTrans(true) {
     if constexpr (XMux::is_2D::value) {
       if (s1 > 0 && s2 == 0) s2 = 1;
       this->m_size1 = s1;
@@ -142,6 +144,7 @@ class XMux : public OptionalDim<Arr> {
       : m_own_cpu(std::make_unique<Arr>()), m_cpu(m_own_cpu.get()) {
     m_size = other.m_size;
     m_dev = other.m_dev;
+    m_isDevTrans = other.m_isDevTrans;
     if constexpr (XMux::is_2D::value) {
       this->m_size1 = other.m_size1;
       this->m_size2 = other.m_size2;
@@ -164,6 +167,7 @@ class XMux : public OptionalDim<Arr> {
     if (this != &other) {
       m_size = other.m_size;
       m_dev = other.m_dev;
+      m_isDevTrans = other.m_isDevTrans;
       if constexpr (XMux::is_2D::value) {
         this->m_size1 = other.m_size1;
         this->m_size2 = other.m_size2;
@@ -197,7 +201,8 @@ class XMux : public OptionalDim<Arr> {
         m_own_cpu(is_internal(other) ? std::move(other.m_own_cpu) : nullptr),
         m_cpu(is_internal(other) ? m_own_cpu.get() : other.m_cpu),
         m_device_data(other.m_device_data),
-        m_dev(other.m_dev) {
+        m_dev(other.m_dev),
+        m_isDevTrans(other.m_isDevTrans) {
     other.m_own_cpu = nullptr;
     other.m_size = 0;
     other.m_device_data = nullptr;
@@ -283,11 +288,11 @@ class XMux : public OptionalDim<Arr> {
   void setDeviceData(dtype* d_x) { m_device_data = d_x; }
   const void* device_data() const { return m_device_data; }
 
-  void to_cpu(bool is_transpose = true) {
+  void to_cpu() {
     if (m_dev == Device::__gpu__ && m_device_data) {
       cudaStreamSynchronize(nullptr);
       if constexpr (XMux::is_2D::value) {
-        if (this->m_size1 > 1 && this->m_size2 > 1 && is_transpose) {
+        if (this->m_size1 > 1 && this->m_size2 > 1 && m_isDevTrans) {
           transpose_gpu(this->m_size2, this->m_size1, (dtype*)m_device_data,
                         (dtype*)m_device_data);
         }
@@ -327,6 +332,7 @@ class XMux : public OptionalDim<Arr> {
       if (this->m_size1 > 1 && this->m_size2 > 1 && is_transpose) {
         transpose_gpu(this->m_size1, this->m_size2, (dtype*)m_device_data,
                       (dtype*)m_device_data);
+        m_isDevTrans = true;
       }
     }
     m_dev = Device::__gpu__;
@@ -400,11 +406,10 @@ class XMux : public OptionalDim<Arr> {
 
   dtype sum() {
     dtype s = 0.f;
-    to_cpu(true);
+    to_cpu();
     for (size_t i = 0; i < m_size; i++) s += m_cpu->getData()[i];
     return s;
   }
-  
 
   //   template <typename F, typename... OtherArrs>
   //   void for_each(F fn, XMux<OtherArrs>&... others);
@@ -414,7 +419,8 @@ template class XMux<ComplexMatrix>;
 template class XMux<ComplexVector>;
 
 template <typename V>
-XMux<V> wrap_xmux(const V& obj) {
+XMux<V> wrap_xmux(const V& obj, bool to_gpu = true) {
   XMux<V> res(obj);
+  if (to_gpu) res.to_gpu();
   return res;
 }

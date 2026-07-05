@@ -55,7 +55,6 @@ bool test_transpose() {
   auto xa = wrap_xmux(a);
   xa.to_gpu();
 
-  //   xa.to_cpu(false);
   xa.to_cpu();
   for (size_t i = 0; i < a.getSize(); i++) {
     cout << p[i] << " ";
@@ -205,7 +204,7 @@ bool test_matmul() {
 
 bool test_fft2d() {
   ComplexMatrix a = createMat(4, 4);
-  auto xa = wrap_xmux(a);
+  auto xa = wrap_xmux(a, false);
 
   cout << "A: " << endl;
   show_arr2d(a);
