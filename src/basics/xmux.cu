@@ -56,6 +56,9 @@ void XMux<Arr>::eye() {
 
 template <typename Arr>
 void XMux<Arr>::add(const XMux<Arr>& other) {
+  assert(m_size == other.getSize());
+  to_gpu();
+  other.to_gpu();
   auto op = [] __device__(auto& a, auto& b) {
     using T = std::decay_t<decltype(a)>;
     if constexpr (std::is_same_v<T, CUDA_COMPLEX>) {
@@ -72,6 +75,9 @@ void XMux<Arr>::add(const XMux<Arr>& other) {
 
 template <typename Arr>
 void XMux<Arr>::substract(const XMux<Arr>& other) {
+  assert(m_size == other.getSize());
+  to_gpu();
+  other.to_gpu();
   auto op = [] __device__(auto& a, auto& b) {
     using T = std::decay_t<decltype(a)>;
     if constexpr (std::is_same_v<T, CUDA_COMPLEX>) {

@@ -107,7 +107,7 @@ void XRcwa2D::createKMatrices() {
                        m_Ky_norm[i][i] * m_Ky_norm[i][i]));
 
     m_Kz0_norm[i][i] =
-        Conj(std::sqrt(Complex{1.f, 0.f} - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
+        Conj(std::sqrt(COMPLEX_ONE - m_Kx_norm[i][i] * m_Kx_norm[i][i] -
                        m_Ky_norm[i][i] * m_Ky_norm[i][i]));
   }
 }
@@ -215,7 +215,7 @@ void XRcwa2D::addUniformLayer(const Complex& eps, Real thickness) {
 
 void XRcwa2D::buildSMat_reflection() {
   // reflection region
-  if (m_eps_ref == Complex{1.f, 0.f}) return;
+  if (m_eps_ref == COMPLEX_ONE) return;
   auto mx_Kx = wrap_xmux(m_Kx_norm);
   auto mx_Ky = wrap_xmux(m_Ky_norm);
   // Qref=[Kx*Ky,eps_ref*I0-Kx*Kx;Ky*Ky-eps_ref*I0,-Ky*Kx];
@@ -294,7 +294,7 @@ void XRcwa2D::buildSMat_reflection() {
   m_global_smat = redheffer(s_ref, m_global_smat);
 }
 void XRcwa2D::buildSMat_transmission() {
-  if (m_eps_trn == Complex{1.f, 0.f}) return;
+  if (m_eps_trn == COMPLEX_ONE) return;
   auto mx_Kx = wrap_xmux(m_Kx_norm);
   auto mx_Ky = wrap_xmux(m_Ky_norm);
   // Qtrn=[Kx*Ky,eps_ref*I0-Kx*Kx;Ky*Ky-eps_ref*I0,-Ky*Kx];
@@ -526,7 +526,7 @@ FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
   eps_conv = computeConvMat(eps_img, max_order_x, max_order_y);
 
   ComplexMatrix inv_eps_img = eps_img;
-  inv_eps_img.for_each([](Complex& a) { return Complex{1.f, 0.f} / a; });
+  inv_eps_img.for_each([](Complex& a) { return COMPLEX_ONE / a; });
   inv_eps_conv = computeConvMat(inv_eps_img, max_order_x, max_order_y);
 
   auto nvf = generateNormalField(eps_img, dx, dy);  // nm
@@ -560,9 +560,21 @@ FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
   XMux<ComplexMatrix> d_eps_conv = xm_inv_eps_conv;
   d_eps_conv.substract(xm_eps_conv);
 
+  std::cout <<"d_eps_conv sig: " << d_eps_conv.cpu().mean_abs2() << std::endl;
+  std::cout << "nxx_conv sig: " << xm_nxx_conv.cpu().mean_abs2() << std::endl;
+// show_arr(eps_conv);
   // eps_xx = eps_conv + deps * nxx_conv
   xm_eps_xx_conv = d_eps_conv * xm_nxx_conv;
+
+  xm_eps_xx_conv.to_cpu();
+  // auto mm = xm_eps_xx_conv.cpu();
+  // show_arr(mm);
+  std::cout << "d_eps_conv * xm_nxx_conv mean_abs2: " << xm_eps_xx_conv.cpu().mean_abs2() << std::endl;
+
   xm_eps_xx_conv.add(xm_eps_conv);
+
+  std::cout << "nxx_conv mean_abs2: " << xm_nxx_conv.cpu().mean_abs2() << std::endl;
+  std::cout << "eps_xx_conv mean_abs2: " << xm_eps_xx_conv.cpu().mean_abs2() << std::endl;
 
   // eps_xy = deps*nxy_conv
   xm_eps_xy_conv = d_eps_conv * xm_nxy_conv;

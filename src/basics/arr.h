@@ -58,7 +58,7 @@ class Array1D {
   }
 
   void resize(size_t s) {
-    if (s!=m_size) m_data.reset();
+    if (s != m_size) m_data.reset();
     m_size = s;
     if (s > 0 && !m_data) {
       m_data = std::make_unique<T[]>(s);
@@ -96,7 +96,7 @@ class Array1D {
 
   Array1D<T> getSubArray(size_t start, size_t sz) {
     Array1D<T> ret(sz);
-    size_t k=0; 
+    size_t k = 0;
     for (size_t i = start; i < start + sz; i++) {
       ret[k++] = m_data[i];
     }
@@ -109,6 +109,15 @@ class Array1D {
     T s = 0.f;
     for (size_t i = 0; i < m_size; i++) s += m_data[i];
     return s;
+  }
+
+  Real mean_abs2() {
+    Real s = 0.f;
+    for (size_t i = 0; i < m_size; i++) {
+      Real a = std::abs(getData()[i]);
+      s += a*a;
+    }
+    return s / m_size;
   }
 };
 
@@ -168,7 +177,9 @@ class Array2D : public Array1D<T> {
   }
 
   T* operator[](size_t i) { return this->m_data.get() + m_size2 * i; }
-  const T* operator[](size_t i) const { return this->m_data.get() + m_size2 * i; }
+  const T* operator[](size_t i) const {
+    return this->m_data.get() + m_size2 * i;
+  }
 
   size_t getSize1() const { return m_size1; }
   size_t getSize2() const { return m_size2; }

@@ -27,7 +27,7 @@ static AddUnitTest t_fft2d("test_fft2d", test_fft2d);
 // static AddUnitTest t_convmat("test_convmat",test_convmat);
 
 static ComplexMatrix createMat(size_t N1, size_t N2,
-                               Complex s = Complex{1.f, 0.f}) {
+                               Complex s = COMPLEX_ONE) {
   ComplexMatrix a(N1, N2);
   Complex* p = a.getData();
   for (size_t i = 0; i < N1 * N2; i++) {

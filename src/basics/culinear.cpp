@@ -1,8 +1,10 @@
 #include "culinear.h"
+
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include <cusolverDn.h>
+
 #include <cassert>
 
 void eig_gpu(const XMux<ComplexMatrix>& A, XMux<ComplexVector>& lambda,
@@ -89,7 +91,8 @@ void linsolve_gpu(const XMux<ComplexMatrix>& A, const XMux<ComplexVector>& b,
   linsolve_mat_gpu(A, B, X);
 
   void* d_X = X.device_data();
-  CUDA_CHECK(cudaMemcpy(x.device_data(), d_X, sizeof(CUDA_COMPLEX) * b.getSize(),
+  CUDA_CHECK(cudaMemcpy(x.device_data(), d_X,
+                        sizeof(CUDA_COMPLEX) * b.getSize(),
                         cudaMemcpyDeviceToDevice));
   x.touchGPU();
 }
@@ -122,9 +125,9 @@ void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B) {
 
   // workspace query
   size_t d_lwork = 0, h_lwork = 0;
-  CUSOLVER_CHECK(cusolverDnXgetrf_bufferSize(handle, params, n, n, CUDA_C_DATATYPE,
-                                             d_A, n, CUDA_C_DATATYPE, &d_lwork,
-                                             &h_lwork));
+  CUSOLVER_CHECK(
+      cusolverDnXgetrf_bufferSize(handle, params, n, n, CUDA_C_DATATYPE, d_A, n,
+                                  CUDA_C_DATATYPE, &d_lwork, &h_lwork));
 
   void* d_work = nullptr;
   void* h_work = nullptr;
@@ -133,8 +136,8 @@ void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B) {
 
   // factorization LU: A = P*L*U, detect singularity
   CUSOLVER_CHECK(cusolverDnXgetrf(handle, params, n, n, CUDA_C_DATATYPE, d_A, n,
-                                  d_ipiv, CUDA_C_DATATYPE, d_work, d_lwork, h_work,
-                                  h_lwork, d_info));
+                                  d_ipiv, CUDA_C_DATATYPE, d_work, d_lwork,
+                                  h_work, h_lwork, d_info));
 
   int h_info = 0;
   CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
@@ -148,8 +151,8 @@ void linsolve_inplace_gpu(XMux<ComplexMatrix>& A, XMux<ComplexMatrix>& B) {
 
   // solve AX=B, B is overwritten with X
   CUSOLVER_CHECK(cusolverDnXgetrs(handle, params, CUBLAS_OP_N, n, nrhs,
-                                  CUDA_C_DATATYPE, d_A, n, d_ipiv, CUDA_C_DATATYPE, d_B,
-                                  n, d_info));
+                                  CUDA_C_DATATYPE, d_A, n, d_ipiv,
+                                  CUDA_C_DATATYPE, d_B, n, d_info));
 
   CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
   if (h_info != 0) {
@@ -194,17 +197,17 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
 
   size_t d_lwork = 0;
   size_t h_lwork = 0;
-  CUSOLVER_CHECK(cusolverDnXgetrf_bufferSize(handle, params, n, n, CUDA_C_DATATYPE,
-                                             d_AT, n, CUDA_C_DATATYPE, &d_lwork,
-                                             &h_lwork));
+  CUSOLVER_CHECK(
+      cusolverDnXgetrf_bufferSize(handle, params, n, n, CUDA_C_DATATYPE, d_AT,
+                                  n, CUDA_C_DATATYPE, &d_lwork, &h_lwork));
   void* d_work = nullptr;
   void* h_work = nullptr;
   if (d_lwork > 0) CUDA_CHECK(cudaMalloc(&d_work, d_lwork));
   if (h_lwork > 0) h_work = std::malloc(h_lwork);
 
-  CUSOLVER_CHECK(cusolverDnXgetrf(handle, params, n, n, CUDA_C_DATATYPE, d_AT, n,
-                                  d_ipiv, CUDA_C_DATATYPE, d_work, d_lwork, h_work,
-                                  h_lwork, d_info));
+  CUSOLVER_CHECK(cusolverDnXgetrf(handle, params, n, n, CUDA_C_DATATYPE, d_AT,
+                                  n, d_ipiv, CUDA_C_DATATYPE, d_work, d_lwork,
+                                  h_work, h_lwork, d_info));
 
   int h_info = 0;
   CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
@@ -214,9 +217,9 @@ void linsolve_right_inplace_gpu(XMux<ComplexMatrix>& A,
   }
 
   // solve XA=B
-  CUSOLVER_CHECK(cusolverDnXgetrs(handle, params, CUBLAS_OP_N, n, m, CUDA_C_DATATYPE,
-                                  d_AT, n, d_ipiv, CUDA_C_DATATYPE, d_BT, m,
-                                  d_info));
+  CUSOLVER_CHECK(cusolverDnXgetrs(handle, params, CUBLAS_OP_N, n, m,
+                                  CUDA_C_DATATYPE, d_AT, n, d_ipiv,
+                                  CUDA_C_DATATYPE, d_BT, m, d_info));
 
   CUDA_CHECK(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
   if (h_info) {
@@ -288,11 +291,12 @@ XMux<ComplexMatrix> operator*(const XMux<ComplexMatrix>& A,
                            d_B, k,                  // leading dim of B
                            &CUCOMPLEX_ZERO, d_C, m  // leading dim of C
                            ));
+  cudaDeviceSynchronize();
   return res;
 }
 
 void fft2d(XMux<ComplexMatrix>& xa) {
-  xa.to_gpu();
+  xa.to_gpu(false);
 
   auto& plan =
       CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(), xa.getSize2());
@@ -302,7 +306,7 @@ void fft2d(XMux<ComplexMatrix>& xa) {
 }
 
 void ifft2d(XMux<ComplexMatrix>& xa, Real s) {
-  xa.to_gpu();
+  xa.to_gpu(false);
   auto& plan =
       CuHandleMgr::getInstance().getFFTPlan(xa.getSize1(), xa.getSize2());
   CUDA_COMPLEX* d_a = (CUDA_COMPLEX*)xa.device_data();

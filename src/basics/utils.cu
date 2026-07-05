@@ -122,9 +122,11 @@ ComplexMatrix computeConvMat(const ComplexMatrix& eps_img, int max_order_x,
   ComplexMatrix F_eps = eps_img;
   auto mx_F_eps = wrap_xmux(F_eps);
   fft2d(mx_F_eps);
-  mx_F_eps.scale(1.f / (nx * ny));
+  mx_F_eps.scale(1.0 / (nx * ny));
   fftshift(mx_F_eps);
-  mx_F_eps.to_cpu();
+  mx_F_eps.to_cpu(false);
+
+  // std::cout << "F_eps center: " << F_eps[nx/2][ny/2] << std::endl;
 
   int kx_min = -nx / 2;
   int ky_min = -ny / 2;

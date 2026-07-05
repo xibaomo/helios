@@ -83,12 +83,8 @@ struct DeviceTypeTraits<double> {
   using type = double;
 };
 template <>
-struct DeviceTypeTraits<std::complex<float>> {
+struct DeviceTypeTraits<Complex> {
   using type = CUDA_COMPLEX;
-};
-template <>
-struct DeviceTypeTraits<std::complex<double>> {
-  using type = cuDoubleComplex;
 };
 template <typename Arr>
 class XMux : public OptionalDim<Arr> {
@@ -100,7 +96,7 @@ class XMux : public OptionalDim<Arr> {
  private:
   std::unique_ptr<Arr> m_own_cpu;
   Arr* const m_cpu;  // bound to an address, but content may change
-  mutable void* m_device_data = nullptr;  // col major on gpu
+  mutable void* m_device_data = nullptr;  
   size_t m_size;
   mutable Device m_dev = Device::__gpu__;
 
@@ -139,7 +135,7 @@ class XMux : public OptionalDim<Arr> {
       this->m_size1 = arr.getSize1();
       this->m_size2 = arr.getSize2();
     }
-    to_gpu();
+    // to_gpu();
   }
 
   XMux(const XMux& other)
@@ -236,13 +232,13 @@ class XMux : public OptionalDim<Arr> {
   }
 
   void resize(size_t rows, size_t cols) {
-    m_size = rows * cols;
     size_t old_size = m_size;
+    m_size = rows * cols;
     if constexpr (XMux::is_2D::value) {
       this->m_size1 = rows;
       this->m_size2 = cols;
     }
-    m_size = rows * cols;
+
     if (m_size == 0) {
       m_own_cpu.reset();
       return;
@@ -408,6 +404,7 @@ class XMux : public OptionalDim<Arr> {
     for (size_t i = 0; i < m_size; i++) s += m_cpu->getData()[i];
     return s;
   }
+  
 
   //   template <typename F, typename... OtherArrs>
   //   void for_each(F fn, XMux<OtherArrs>&... others);
