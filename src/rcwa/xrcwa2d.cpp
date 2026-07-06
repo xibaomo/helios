@@ -561,8 +561,8 @@ FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
   XMux<ComplexMatrix> d_eps_conv = xm_inv_eps_conv;
   d_eps_conv.substract(xm_eps_conv);
 
-  std::cout <<"d_eps_conv sig: " << d_eps_conv.cpu().mean_abs2() << std::endl;
-  std::cout << "nxx_conv sig: " << xm_nxx_conv.cpu().mean_abs2() << std::endl;
+  std::cout <<"d_eps_conv sig: " << d_eps_conv.cpu().sum() << std::endl;
+  std::cout << "nxx_conv sig: " << xm_nxx_conv.cpu().sum() << std::endl;
 // show_arr(eps_conv);
   // eps_xx = eps_conv + deps * nxx_conv
   xm_eps_xx_conv = d_eps_conv * xm_nxx_conv;
@@ -570,12 +570,12 @@ FFFConvMats computeFFFConvMat(const ComplexMatrix& eps_img, Real dx, Real dy,
   xm_eps_xx_conv.to_cpu();
   // auto mm = xm_eps_xx_conv.cpu();
   // show_arr(mm);
-  std::cout << "d_eps_conv * xm_nxx_conv mean_abs2: " << xm_eps_xx_conv.cpu().mean_abs2() << std::endl;
+  std::cout << "d_eps_conv * xm_nxx_conv mean_abs2: " << xm_eps_xx_conv.cpu().sum() << std::endl;
 
   xm_eps_xx_conv.add(xm_eps_conv);
 
-  std::cout << "nxx_conv mean_abs2: " << xm_nxx_conv.cpu().mean_abs2() << std::endl;
-  std::cout << "eps_xx_conv mean_abs2: " << xm_eps_xx_conv.cpu().mean_abs2() << std::endl;
+  std::cout << "nxx_conv mean_abs2: " << xm_nxx_conv.cpu().sum() << std::endl;
+  std::cout << "eps_xx_conv mean_abs2: " << xm_eps_xx_conv.cpu().sum() << std::endl;
 
   // eps_xy = deps*nxy_conv
   xm_eps_xy_conv = d_eps_conv * xm_nxy_conv;

@@ -166,16 +166,16 @@ bool test_conv_mat() {
 
   ComplexMatrix cm = computeConvMat(eps_img, 1, 1);
 
-//   cout << "Eps conv mat: " << endl;
-//   show_arr(cm);
+  cout << "Eps conv mat: " << endl;
+  show_arr(cm);
 
-  cout << "mean_abs2 eps_conv: " << cm.mean_abs2()<< endl;
+  cout << " eps_conv sum: " << cm.sum()<< endl;
 
   ComplexMatrix inv_eps = eps_img;
   inv_eps.for_each([](Complex& a) { return COMPLEX_ONE / a; });
   ComplexMatrix inv_cm = computeConvMat(inv_eps, 1, 1);
 
-  cout << "mean_abs2 of inv eps: " << inv_cm.mean_abs2() << endl;
+  cout << "mean_abs2 of inv eps: " << inv_cm.sum() << endl;
   return true;
 }
 
@@ -194,17 +194,17 @@ bool test_normal_vector_field() {
   ComplexMatrix nxx = eps_img;
   nxx.for_each([](Complex& a, Real b) { return Complex{b * b, 0.f}; }, nx);
   ComplexMatrix nxx_conv = computeConvMat(nxx, 1, 1);
-  cout << "conv nxx sig: " << nxx_conv.mean_abs2() << endl;
+  cout << "conv nxx sig: " << nxx_conv.sum() << endl;
 
   ComplexMatrix nxy = eps_img;
   nxy.for_each([](Complex& a, Real b, Real c) { return b * c; }, nx, ny);
   ComplexMatrix nxy_conv = computeConvMat(nxy, 1, 1);
-  cout << "conv nxy sig: " << nxy_conv.mean_abs2() << endl;
+  cout << "conv nxy sig: " << nxy_conv.sum() << endl;
 
   ComplexMatrix nyy = eps_img;
   nyy.for_each([](Complex& a, Real b) { return Complex{b * b, 0.f}; }, ny);
   ComplexMatrix nyy_conv = computeConvMat(nyy, 1, 1);
-  cout << "conv nyy sig: " << nyy_conv.mean_abs2() << endl;
+  cout << "conv nyy sig: " << nyy_conv.sum() << endl;
   return true;
 }
 
@@ -213,11 +213,11 @@ bool test_fff_eps() {
 
   auto fff_eps = computeFFFConvMat(eps_img, 1, 1, 1, 1);
 
-  cout << "eps_conv sig: " << fff_eps.eps_conv.mean_abs2() << endl;
-  cout << "inv eps conv sig: " << fff_eps.inv_eps_conv.mean_abs2() << endl;
-  cout << "eps xx sig: " << fff_eps.eps_xx_conv.mean_abs2() << endl;
-  cout << "eps xy sig: " << fff_eps.eps_xy_conv.mean_abs2() << endl;
-  cout << "eps yy sig: " << fff_eps.eps_yy_conv.mean_abs2() << endl;
+  cout << "eps_conv sig: " << fff_eps.eps_conv.sum() << endl;
+  cout << "inv eps conv sig: " << fff_eps.inv_eps_conv.sum() << endl;
+  cout << "eps xx sig: " << fff_eps.eps_xx_conv.sum() << endl;
+  cout << "eps xy sig: " << fff_eps.eps_xy_conv.sum() << endl;
+  cout << "eps yy sig: " << fff_eps.eps_yy_conv.sum() << endl;
 
   return true;
 }
