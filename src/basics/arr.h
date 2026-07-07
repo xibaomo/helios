@@ -105,17 +105,21 @@ class Array1D {
 
   T& end() { return m_data[m_size - 1]; }
 
-  T sum() {
+  __attribute__((noinline)) T sum() {
     T s = 0.f;
     for (size_t i = 0; i < m_size; i++) s += m_data[i];
     return s;
   }
 
-  Real mean_abs2() {
+  __attribute__((noinline)) Real mean_abs2() const {
     Real s = 0.f;
     for (size_t i = 0; i < m_size; i++) {
-      Real a = std::abs(getData()[i]);
-      s += a*a;
+      Real a = std::abs(m_data.get()[i]);
+      s += a * a;
+    }
+    if (s < -1.0f) {
+      std::cout << "This will never happen but forces symbol retention: " << s
+                << std::endl;
     }
     return s / m_size;
   }
@@ -123,7 +127,9 @@ class Array1D {
 
 template class Array1D<int>;
 template class Array1D<float>;
+template class Array1D<double>;
 template class Array1D<std::complex<float>>;
+template class Array1D<std::complex<double>>;
 // *****************************************************************************
 
 template <typename T>

@@ -4,9 +4,9 @@
 #include "utils.h"
 
 // CUDA Kernel for 2D FFTShift (Optimized for Column-Major Layout)
-__global__ void fftshift_2d_col_major_kernel(const CUDA_COMPLEX* __restrict__ d_in,
-                                             CUDA_COMPLEX* __restrict__ d_out,
-                                             int H, int W) {
+__global__ void fftshift_2d_col_major_kernel(
+    const CUDA_COMPLEX* __restrict__ d_in, CUDA_COMPLEX* __restrict__ d_out,
+    int H, int W) {
   // CRITICAL: threadIdx.x must map to the Row (fastest-changing index in
   // memory)
   int out_row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -67,8 +67,8 @@ void fftshift(XMux<ComplexMatrix>& A) {
 }
 
 __global__ void ifftshift_2d_col_major_kernel(
-    const CUDA_COMPLEX* __restrict__ d_in, CUDA_COMPLEX* __restrict__ d_out, int H,
-    int W) {
+    const CUDA_COMPLEX* __restrict__ d_in, CUDA_COMPLEX* __restrict__ d_out,
+    int H, int W) {
   // Coalescing Rule: threadIdx.x must handle the fastest-changing memory
   // dimension. In Column-Major, this is the Row index.
   int out_row = blockIdx.x * blockDim.x + threadIdx.x;
@@ -120,7 +120,7 @@ ComplexMatrix computeConvMat(const ComplexMatrix& eps_img, int max_order_x,
   size_t nx = eps_img.getSize1();
   size_t ny = eps_img.getSize2();
   ComplexMatrix F_eps = eps_img;
-  auto mx_F_eps = wrap_xmux(F_eps,false);
+  auto mx_F_eps = wrap_xmux(F_eps, false);
   fft2d(mx_F_eps);
   mx_F_eps.scale(1.0 / (nx * ny));
   fftshift(mx_F_eps);
@@ -153,121 +153,112 @@ ComplexMatrix computeConvMat(const ComplexMatrix& eps_img, int max_order_x,
   return conv_mat;
 }
 
-// Structure to store 2D plane vectors
-struct Real2 {
-  Real x;  // X-component (corresponds to changes across columns)
-  Real y;  // Y-component (corresponds to changes across rows)
+struct MyComplex {
+  Real x;
+  Real y;
 };
 
-// ============================================================================
-// CUDA Kernel: Computes 2D normalized gradient direction field using Sobel
-// Layout: Optimized for Column-Major matrix memory alignment
-// ============================================================================
-__global__ void compute_gradient_2d_sobel_kernel(
-    const CUDA_COMPLEX* __restrict__ d_in, Real2* __restrict__ d_gradients, int H,
-    int W, Real dx, Real dy) {
-  // Coalescing Rule: threadIdx.x must handle the contiguous row index (i)
-  // to achieve perfect memory coalescing in Column-Major layout.
-  int i = blockIdx.x * blockDim.x + threadIdx.x;  // Row index (Y-geometry)
-  int j = blockIdx.y * blockDim.y + threadIdx.y;  // Column index (X-geometry)
+__device__ Real get_pixel_wrap(const MyComplex* data, int r, int c, int H,
+                               int W) {
+  int wrapped_r = (r % H + H) % H;
+  int wrapped_c = (c % W + W) % W;
+  MyComplex val = data[wrapped_r * W + wrapped_c];
+  return sqrt(val.x * val.x + val.y * val.y);
+}
 
-  if (i < H && j < W) {
-    // Boundary-safe lambda to compute complex magnitude securely at clamped
-    // edges
-    auto get_height = [&](int r, int c) -> Real {
-      r = max(0, min(r, H - 1));
-      c = max(0, min(c, W - 1));
-      return cu_abs(
-          d_in[c * H + r]);  // Column-Major flat indexing: col * H + row
-    };
+__global__ void compute_gradient_2d_sobel_wrap_kernel(
+    const MyComplex* d_in, Real* d_nx, Real* d_ny, int H, int W, Real dx,
+    Real dy)  // Passed spatial pixel sizes
+{
+  int c = blockIdx.x * blockDim.x + threadIdx.x;
+  int r = blockIdx.y * blockDim.y + threadIdx.y;
 
-    // ====================================================================
-    // 1. Apply Sobel X-Operator in index space, then scale by physical dx
-    // ====================================================================
-    Real h00 = get_height(i - 1, j - 1);
-    Real h10 = get_height(i, j - 1);
-    Real h20 = get_height(i + 1, j - 1);
+  if (r >= H || c >= W) return;
 
-    Real h02 = get_height(i - 1, j + 1);
-    Real h12 = get_height(i, j + 1);
-    Real h22 = get_height(i + 1, j + 1);
+  // Pixel gradients (dimensionless numerical derivative from Sobel)
+  Real gx_num = (-1.0 * get_pixel_wrap(d_in, r - 1, c - 1, H, W) +
+                 1.0 * get_pixel_wrap(d_in, r - 1, c + 1, H, W) +
+                 -2.0 * get_pixel_wrap(d_in, r, c - 1, H, W) +
+                 2.0 * get_pixel_wrap(d_in, r, c + 1, H, W) +
+                 -1.0 * get_pixel_wrap(d_in, r + 1, c - 1, H, W) +
+                 1.0 * get_pixel_wrap(d_in, r + 1, c + 1, H, W)) /
+                8.0;
 
-    // Compute physical gradient along X-axis (divided by 8 for operator
-    // normalization)
-    Real dg_dx =
-        ((h02 + 2.0f * h12 + h22) - (h00 + 2.0f * h10 + h20)) / (8.0f * dx);
+  Real gy_num = (-1.0 * get_pixel_wrap(d_in, r - 1, c - 1, H, W) -
+                 2.0 * get_pixel_wrap(d_in, r - 1, c, H, W) -
+                 1.0 * get_pixel_wrap(d_in, r - 1, c + 1, H, W) +
+                 1.0 * get_pixel_wrap(d_in, r + 1, c - 1, H, W) +
+                 2.0 * get_pixel_wrap(d_in, r + 1, c, H, W) +
+                 1.0 * get_pixel_wrap(d_in, r + 1, c + 1, H, W)) /
+                8.0;
 
-    // ====================================================================
-    // 2. Apply Sobel Y-Operator in index space, then scale by physical dy
-    // ====================================================================
-    Real h01 = get_height(i - 1, j);
-    Real h21 = get_height(i + 1, j);
+  // ------------------------------------------------------------------------
+  // Convert to true physical gradients by scaling with pixel sizes
+  // ------------------------------------------------------------------------
+  Real gx = gx_num / dx;
+  Real gy = gy_num / dy;
 
-    // Compute physical gradient along Y-axis
-    Real dg_dy =
-        ((h20 + 2.0f * h21 + h22) - (h00 + 2.0f * h01 + h02)) / (8.0f * dy);
+  // Calculate magnitude based on physical gradients
+  Real mag = sqrt(gx * gx + gy * gy);
+  Real eps_stab = 1e-12;
 
-    // ====================================================================
-    // 3. Vector magnitude calculation and 2D normalization
-    // ====================================================================
-    Real len_2d = sqrtf(dg_dx * dg_dx + dg_dy * dg_dy);
-
-    int out_idx = j * H + i;  // Destination index in Column-Major output
-
-    // Normalize to get pure directional vectors and prevent division by zero
-    if (len_2d > 1e-8f) {
-      Real inv_len = 1.0f / len_2d;
-      d_gradients[out_idx].x = dg_dx * inv_len;
-      d_gradients[out_idx].y = dg_dy * inv_len;
-    } else {
-      // Flat regions have no explicit gradient direction
-      d_gradients[out_idx].x = 0.0f;
-      d_gradients[out_idx].y = 0.0f;
-    }
+  int idx = r * W + c;
+  if (mag < eps_stab) {
+    d_nx[idx] = 0.0;
+    d_ny[idx] = 0.0;
+  } else {
+    d_nx[idx] = gx / (mag + eps_stab);
+    d_ny[idx] = gy / (mag + eps_stab);
   }
 }
 
 std::tuple<RealMatrix, RealMatrix> generateNormalField(
-    const ComplexMatrix& eps_img, Real dx, Real dy) {
+    const ComplexMatrix& eps_img, Real dx,
+    Real dy)  // Accept dx and dy from solver configurations
+{
   auto xm_eps_img = wrap_xmux(eps_img);
   xm_eps_img.to_gpu();
-
-  std::tuple<RealMatrix, RealMatrix> normal_field;
-  // 32 threads in X map to continuous row mrmory, ensure Warp Coalescing
-  dim3 blockDim(32, 16);
 
   const int H = eps_img.getSize1();
   const int W = eps_img.getSize2();
 
-  dim3 gridDim((H + blockDim.x - 1) / blockDim.x,
-               (W + blockDim.y - 1) / blockDim.y);
-
-  void* d_in = xm_eps_img.device_data();
-  void* d_normals;
-  CUDA_CHECK(cudaMalloc(&d_normals, sizeof(Real2) * H * W));
-
-  compute_gradient_2d_sobel_kernel<<<gridDim, blockDim, 0, 0>>>(
-      (CUDA_COMPLEX*)d_in, (Real2*)d_normals, H, W, dx, dy);
-
-  // ??????
-  cudaError_t err = cudaGetLastError();
-  if (err != cudaSuccess) {
-    std::cerr << "Sobel normal field kernel failed: " << cudaGetErrorString(err)
-              << std::endl;
-  }
-
-  Real2* h_normals = (Real2*)malloc(sizeof(Real2) * H * W);
-  CUDA_CHECK(cudaMemcpy(h_normals, d_normals, sizeof(Real2) * H * W,
-                        cudaMemcpyDeviceToHost));
-  cudaFree(d_normals);
-
+  std::tuple<RealMatrix, RealMatrix> normal_field;
   auto& [nx, ny] = normal_field;
   nx.resize(H, W);
   ny.resize(H, W);
+
+  dim3 blockDim(32, 16);
+  dim3 gridDim((W + blockDim.x - 1) / blockDim.x,
+               (H + blockDim.y - 1) / blockDim.y);
+
+  void* d_in = xm_eps_img.device_data();
+
+  Real* d_nx;
+  Real* d_ny;
+  CUDA_CHECK(cudaMalloc(&d_nx, sizeof(Real) * H * W));
+  CUDA_CHECK(cudaMalloc(&d_ny, sizeof(Real) * H * W));
+
+  // Pass dx and dy to the physical-gradient kernel
+  compute_gradient_2d_sobel_wrap_kernel<<<gridDim, blockDim>>>(
+      (MyComplex*)d_in, d_nx, d_ny, H, W, dx, dy);
+
+  CUDA_CHECK(cudaGetLastError());
+  CUDA_CHECK(cudaDeviceSynchronize());
+
+  std::vector<Real> h_nx(H * W);
+  std::vector<Real> h_ny(H * W);
+  CUDA_CHECK(cudaMemcpy(h_nx.data(), d_nx, sizeof(Real) * H * W,
+                        cudaMemcpyDeviceToHost));
+  CUDA_CHECK(cudaMemcpy(h_ny.data(), d_ny, sizeof(Real) * H * W,
+                        cudaMemcpyDeviceToHost));
+
+  cudaFree(d_nx);
+  cudaFree(d_ny);
+
   for (size_t i = 0; i < H; i++) {
     for (size_t j = 0; j < W; j++) {
-      nx[i][j] = h_normals[i * W + j].x;
-      ny[i][j] = h_normals[i * W + j].y;
+      nx[i][j] = h_ny[i * W + j];
+      ny[i][j] = h_nx[i * W + j];
     }
   }
 

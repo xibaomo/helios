@@ -282,11 +282,11 @@ def main():
     dt[orderN // 2, 0] = 1.0   # MATLAB: dt(floor(orderN/2)+1)=1  -> 0-indexed same position
 
     # TE
-    # px = -np.sin(phi)
-    # py = -np.cos(phi)
+    px = -np.sin(phi)
+    py = -np.cos(phi)
     # TM (uncomment if needed)
-    px = -cos_theta * np.cos(phi)
-    py = cos_theta * np.sin(phi)
+    # px = -cos_theta * np.cos(phi)
+    # py = cos_theta * np.sin(phi)
 
     e_src = np.vstack([px * dt, py * dt])
     c_src = e_src

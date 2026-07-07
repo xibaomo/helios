@@ -8,6 +8,7 @@ find_package(CUDAToolkit REQUIRED)
 set(CMAKE_CUDA_ARCHITECTURES native)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -Og")
 
 set(CUDA_DIR /usr/local/cuda-12.9)
 include_directories(${CUDA_DIR}/include)
