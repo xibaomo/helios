@@ -1,29 +1,84 @@
 import numpy as np
 from scipy.linalg import expm, eig
+import cupy as cp
 
 # ---------------------------------------------------------------
 # helper functions (MATLAB \ and / operators)
 # ---------------------------------------------------------------
 def mldivide(A, B):
     """A\B  ==  inv(A) @ B"""
-    return np.linalg.solve(A, B)
+    # return np.linalg.solve(A, B)
+
+    A_gpu = cp.ascontiguousarray(cp.asarray(A, dtype=cp.complex128))
+    B_gpu = cp.ascontiguousarray(cp.asarray(B, dtype=cp.complex128))
+    
+    # 2. ?? GPU ???
+    X_gpu = cp.linalg.solve(A_gpu, B_gpu)
+    
+    # 3. ?? .get() ?????? CPU,?? numpy.ndarray
+    return X_gpu.get()
 
 def mrdivide(A, B):
     """A/B  ==  A @ inv(B)"""
-    return np.linalg.solve(B.T, A.T).T
+    # return np.linalg.solve(B.T, A.T).T
+
+    A_gpu = cp.asarray(A, dtype=cp.complex128)
+    B_gpu = cp.asarray(B, dtype=cp.complex128)
+    
+    # 2. ????,?????????????????
+    #    ??????? cuSOLVER ??????,??????????????
+    BT_contiguous = cp.ascontiguousarray(B_gpu.T)
+    AT_contiguous = cp.ascontiguousarray(A_gpu.T)
+    
+    # 3. ? GPU ??????? BT @ XT = AT
+    XT_gpu = cp.linalg.solve(BT_contiguous, AT_contiguous)
+    
+    # 4. ? XT ?????? X,???? CPU ?? NumPy ??
+    #    ??:XT_gpu.T ??????,.get() ????????
+    return XT_gpu.T.get()
 
 
 # ---------------------------------------------------------------
 # redheffer star product
 # ---------------------------------------------------------------
 def redheffer(a11, a12, a21, a22, b11, b12, b21, b22):
-    I0 = np.eye(a11.shape[0], dtype=complex)
-    D = a12 @ np.linalg.inv(I0 - b11 @ a22)
-    F = b21 @ np.linalg.inv(I0 - a22 @ b11)
+    # I0 = np.eye(a11.shape[0], dtype=complex)
+    # D = a12 @ np.linalg.inv(I0 - b11 @ a22)
+    # F = b21 @ np.linalg.inv(I0 - a22 @ b11)
+    # s11 = a11 + D @ b11 @ a21
+    # s12 = D @ b12
+    # s21 = F @ a21
+    # s22 = b22 + F @ a22 @ b12
+    # return s11, s12, s21, s22
+    """
+    Redheffer star product (S-matrix cascading) implemented in CuPy.
+    Uses cp.linalg.solve instead of cp.linalg.inv for superior numerical stability.
+    """
+    a11, a12, a21, a22 = cp.asarray(a11), cp.asarray(a12), cp.asarray(a21), cp.asarray(a22)
+    b11, b12, b21, b22 = cp.asarray(b11), cp.asarray(b12), cp.asarray(b21), cp.asarray(b22)
+    
+    # Create Identity matrix on the current GPU device
+    # Ensure dtype is complex128 (double complex) for RCWA stability
+    I0 = cp.eye(a11.shape[0], dtype=cp.complex128)
+    
+    # --- Optimize D = a12 @ inv(I0 - b11 @ a22) ---
+    # Mathematically: D @ (I0 - b11 @ a22) = a12
+    # Transpose for cp.linalg.solve: (I0 - b11 @ a22).T @ D.T = a12.T
+    mat_D = I0 - b11 @ a22
+    D = cp.linalg.solve(mat_D.T, a12.T).T
+    
+    # --- Optimize F = b21 @ inv(I0 - a22 @ b11) ---
+    # Mathematically: F @ (I0 - a22 @ b11) = b21
+    # Transpose for cp.linalg.solve: (I0 - a22 @ b11).T @ F.T = b21.T
+    mat_F = I0 - a22 @ b11
+    F = cp.linalg.solve(mat_F.T, b21.T).T
+    
+    # --- Calculate updated S-matrix subblocks ---
     s11 = a11 + D @ b11 @ a21
     s12 = D @ b12
     s21 = F @ a21
     s22 = b22 + F @ a22 @ b12
+    
     return s11, s12, s21, s22
 
 
@@ -112,9 +167,10 @@ def generate_normal_field(epsilon_map_):
 # main script
 # ---------------------------------------------------------------
 def main():
-    max_order_x = 1
-    max_order_y = 1
+    max_order_x = 7
+    max_order_y = max_order_x
     orderN = (2 * max_order_x + 1) * (2 * max_order_y + 1)
+    print(f"total orders: {orderN}")
     alpha, beta = 0.78, 0
     lam_wave = 193.0     # renamed from 'lambda' (reserved keyword in Python)
     L = 400.0
@@ -131,10 +187,14 @@ def main():
     m_flat = m_grid.flatten(order='F')
     n_flat = n_grid.flatten(order='F')
 
-    sin_theta = 1.35 / 4 * np.sqrt(alpha**2 + beta**2)
-    phi = 1 * np.pi / 3
+    # sin_theta = 1.35 / 4 * np.sqrt(alpha**2 + beta**2)
+    sin_theta = 0.
+    # phi = 1 * np.pi / 3
+    phi = 0.
+    
     cos_theta = np.sqrt(1 - sin_theta**2)
-    kx_inc = -n_inc * sin_theta * np.cos(phi)
+    
+    kx_inc = n_inc * sin_theta * np.cos(phi)
     ky_inc = n_inc * sin_theta * np.sin(phi)
     kz_inc = n_inc * np.sqrt(1 - sin_theta**2)
 
@@ -195,24 +255,27 @@ def main():
 
     # patterned layer
     a = 200.0
-    eps = (2.612 - 1j * 0.356) ** 2
+    # eps = (2.612 - 1j * 0.356) ** 2
+    eps = 2.612**2 + 0j;
     t = 56.0
     s = int(L / 2 - a / 2)   # MATLAB 1-indexed start position
 
     eps_img = np.ones((int(L), int(L)), dtype=complex)
     # MATLAB: eps_img(s:s+a-1, s:s+a/2-1) = eps   (1-indexed, inclusive)
 
-    eps_img[s:int(s+a), s:s+int(a//2)] = eps
+    eps_img[s:int(s+a), s:int(s+(a/2))] = eps
 
     eps_conv = img2conv_mat(eps_img, max_order_x)
-    inv_eps_conv = img2conv_mat(1./eps_img,max_order_x)
+    receps_conv = img2conv_mat(1./eps_img,max_order_x)
+    inv_eps_conv = np.linalg.inv(eps_conv)
+    inv_receps_conv = np.linalg.inv(receps_conv)
     nx, ny = generate_normal_field(eps_img)
 
     nxx_conv = img2conv_mat(nx * nx, max_order_x)
     nxy_conv = img2conv_mat(nx * ny, max_order_x)
     nyy_conv = img2conv_mat(ny * ny, max_order_x)
 
-    d_eps_conv = inv_eps_conv - eps_conv
+    d_eps_conv = inv_receps_conv - eps_conv
     eps_xx_conv = eps_conv + d_eps_conv @ nxx_conv
     eps_xy_conv = d_eps_conv @ nxy_conv
     eps_yx_conv = d_eps_conv @ nxy_conv
@@ -282,12 +345,14 @@ def main():
     dt[orderN // 2, 0] = 1.0   # MATLAB: dt(floor(orderN/2)+1)=1  -> 0-indexed same position
 
     # TE
-    px = -np.sin(phi)
-    py = -np.cos(phi)
+    # px = -np.sin(phi)
+    # py = np.cos(phi)
     # TM (uncomment if needed)
-    # px = -cos_theta * np.cos(phi)
-    # py = cos_theta * np.sin(phi)
+    px = -cos_theta * np.cos(phi)
+    py = cos_theta * np.sin(phi)
 
+    S11 = S11.get()
+    S21 = S21.get()
     e_src = np.vstack([px * dt, py * dt])
     c_src = e_src
     c_ref = S11 @ c_src
@@ -303,7 +368,7 @@ def main():
     rz = -np.linalg.inv(Kz_ref) @ (Kx @ rx + Ky @ ry)
     tz = -np.linalg.inv(Kz_trn) @ (Kx @ tx + Ky @ ty)
     
-    breakpoint()
+    
 
     R2 = np.abs(rx)**2 + np.abs(ry)**2 + np.abs(rz)**2
     R = np.real(-Kz_ref).diagonal() / np.real(kz_inc) * R2
@@ -312,8 +377,12 @@ def main():
     T = np.real(Kz_trn).diagonal() / np.real(kz_inc) * T2
 
     mid = len(T) // 2
-    print(T[mid])
+    print(np.sum(R))
     print(np.sum(T))
+    
+    print(f"R+T: {np.sum(R+T)}")
+    
+    breakpoint()
 
 
 if __name__ == "__main__":
