@@ -4,12 +4,12 @@ Transmission and reflection of single pattern layer
 import grcwa 
 import numpy as np 
 
-nG = 15*15
+nG = 23**2
 L = 400.
 L1 = [L,0.]
 L2 = [0.,L]
 freq = 1/193 
-theta = 0. 
+theta = 10./180.*np.pi 
 phi = 0. 
 
 Qabs = np.inf 
@@ -22,7 +22,13 @@ Ny = 400
 a=200
 epgrid = np.ones((Nx,Ny),dtype = float) 
 s = int(L/2-a/2)
-epgrid[s:s+a,s:int(s+a/2)] = 2.612**2
+# epgrid[s:s+a,s:int(s+a/2)] = 2.612**2
+yy, xx = np.meshgrid(np.arange(int(L)), np.arange(int(L)), indexing='ij')
+center = L/2
+radius = a/2
+mask = (xx-center)**2 + (yy-center)**2 <= radius**2
+epgrid = np.ones((int(L), int(L)), dtype=complex)
+epgrid[mask] = 2.612**2
 
 obj = grcwa.obj(nG,L1,L2,freqcmp,theta,phi,verbose=1)
 obj.Add_LayerUniform(1,1.563**2)

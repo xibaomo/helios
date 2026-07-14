@@ -167,7 +167,7 @@ def generate_normal_field(epsilon_map_):
 # main script
 # ---------------------------------------------------------------
 def main():
-    max_order_x = 7
+    max_order_x = 11
     max_order_y = max_order_x
     orderN = (2 * max_order_x + 1) * (2 * max_order_y + 1)
     print(f"total orders: {orderN}")
@@ -188,7 +188,7 @@ def main():
     n_flat = n_grid.flatten(order='F')
 
     # sin_theta = 1.35 / 4 * np.sqrt(alpha**2 + beta**2)
-    sin_theta = 0.
+    sin_theta = np.sin(10/180*np.pi)
     # phi = 1 * np.pi / 3
     phi = 0.
     
@@ -243,12 +243,28 @@ def main():
     B1 = mldivide(W1, W0) - mldivide(V1, V0)
     X1 = expm(-lam1 * k0 * t)
 
-    A1_inv = np.linalg.inv(A1)
-    D = A1 - X1 @ B1 @ A1_inv @ X1 @ B1
-    D_inv = np.linalg.inv(D)
+    # A1_inv = np.linalg.inv(A1)
+    # D = A1 - X1 @ B1 @ A1_inv @ X1 @ B1
+    # D_inv = np.linalg.inv(D)
 
-    s1_11 = D_inv @ (X1 @ B1 @ A1_inv @ X1 @ A1 - B1)
-    s1_12 = D_inv @ X1 @ (A1 - B1 @ A1_inv @ B1)
+    # s1_11 = D_inv @ (X1 @ B1 @ A1_inv @ X1 @ A1 - B1)
+    # s1_12 = D_inv @ X1 @ (A1 - B1 @ A1_inv @ B1)
+    
+    # A1^{-1} X1 B1
+    A1_inv_X1B1 = np.linalg.solve(A1, X1 @ B1)
+
+    # D = A1 - X1 B1 A1^{-1} X1 B1
+    D = A1 - X1 @ B1 @ A1_inv_X1B1
+
+    # X1 B1 A1^{-1} X1 A1
+    tmp1 = X1 @ B1 @ np.linalg.solve(A1, X1 @ A1)
+
+    # X1 (A1 - B1 A1^{-1} B1)
+    tmp2 = X1 @ (A1 - B1 @ np.linalg.solve(A1, B1))
+
+    # D^{-1}(...)
+    s1_11 = np.linalg.solve(D, tmp1 - B1)
+    s1_12 = np.linalg.solve(D, tmp2)
 
     S11, S12, S21, S22 = redheffer(S11, S12, S21, S22,
                                     s1_11, s1_12, s1_12, s1_11)
@@ -263,7 +279,13 @@ def main():
     eps_img = np.ones((int(L), int(L)), dtype=complex)
     # MATLAB: eps_img(s:s+a-1, s:s+a/2-1) = eps   (1-indexed, inclusive)
 
-    eps_img[s:int(s+a), s:int(s+(a/2))] = eps
+    # eps_img[s:int(s+a), s:int(s+(a/2))] = eps
+    yy, xx = np.meshgrid(np.arange(int(L)), np.arange(int(L)), indexing='ij')
+    center = L/2
+    radius = a/2
+    mask = (xx-center)**2 + (yy-center)**2 <= radius**2
+    eps_img = np.ones((int(L), int(L)), dtype=complex)
+    eps_img[mask] = eps
 
     eps_conv = img2conv_mat(eps_img, max_order_x)
     receps_conv = img2conv_mat(1./eps_img,max_order_x)
@@ -280,13 +302,12 @@ def main():
     eps_xy_conv = d_eps_conv @ nxy_conv
     eps_yx_conv = d_eps_conv @ nxy_conv
     eps_yy_conv = eps_conv + d_eps_conv @ nyy_conv
-    
-    # breakpoint()
 
     P11 = Kx @ inv_eps_conv @ Ky
     P12 = I0 - Kx @ inv_eps_conv @ Kx
     P21 = Ky @ inv_eps_conv @ Ky - I0
     P22 = -Ky @ inv_eps_conv @ Kx
+
     P = np.block([[P11, P12], [P21, P22]])
 
     Q11 = Kx @ Ky + eps_yx_conv
@@ -300,7 +321,16 @@ def main():
     # eig: scipy.linalg.eig(A) returns (eigvals, eigvecs) with
     # A @ eigvecs[:,i] = eigvals[i] * eigvecs[:,i], matching MATLAB's [W,D]=eig(A)
     eigvals, W = eig(OMEGA2)
-    LAM = np.diag(np.sqrt(eigvals))  # principal sqrt, matches MATLAB sqrt() on diagonal
+    q=np.sqrt(eigvals)
+
+    mask=(q.real<0)
+
+    q[mask]=-q[mask]
+
+    mask=(np.abs(q.real)<1e-12) & (q.imag<0)
+
+    q[mask]=-q[mask]
+    LAM = np.diag(q)  # principal sqrt, matches MATLAB sqrt() on diagonal
 
     W_inv = np.linalg.inv(W)
     LAM_inv = np.linalg.inv(LAM)
@@ -308,14 +338,31 @@ def main():
 
     A = mldivide(W, W0) + mldivide(V, V0)
     B = mldivide(W, W0) - mldivide(V, V0)
-    X = expm(-LAM * k0 * t)
+    # X = expm(-LAM * k0 * t)
+    X=np.diag(np.exp(-np.diag(LAM)*k0*t))
 
-    A_inv = np.linalg.inv(A)
-    D = A - X @ B @ A_inv @ X @ B
-    D_inv = np.linalg.inv(D)
+    # A_inv = np.linalg.inv(A)
+    # D = A - X @ B @ A_inv @ X @ B
+    # D_inv = np.linalg.inv(D)
 
-    S2_11 = D_inv @ (X @ B @ A_inv @ X @ A - B)
-    S2_12 = D_inv @ X @ (A - B @ A_inv @ B)
+    # S2_11 = D_inv @ (X @ B @ A_inv @ X @ A - B)
+    # S2_12 = D_inv @ X @ (A - B @ A_inv @ B)
+    
+    rhs = np.hstack((X @ B, X @ A, B))
+    sol = np.linalg.solve(A, rhs)
+
+    n = A.shape[1]
+    A_inv_XB = sol[:, :n]
+    A_inv_XA = sol[:, n:2*n]
+    A_inv_B  = sol[:, 2*n:]
+
+    D = A - X @ B @ A_inv_XB
+
+    tmp1 = X @ B @ A_inv_XA
+    tmp2 = X @ (A - B @ A_inv_B)
+
+    S2_11 = np.linalg.solve(D, tmp1 - B)
+    S2_12 = np.linalg.solve(D, tmp2)
 
     S11, S12, S21, S22 = redheffer(S11, S12, S21, S22,
                                     S2_11, S2_12, S2_12, S2_11)
@@ -329,13 +376,32 @@ def main():
                          [Z0, -1j * Kz_ref]])
     Vref = mrdivide(Qref, Lam_ref)
 
+    # A = mldivide(W0, Wref) + mldivide(V0, Vref)
+    # B = mldivide(W0, Wref) - mldivide(V0, Vref)
+
+    # Sr_11 = -mldivide(A, B)
+    # Sr_12 = 2 * np.linalg.inv(A)
+    # Sr_21 = 0.5 * (A - mrdivide(B, A) @ B)
+    # Sr_22 = mrdivide(B, A)
     A = mldivide(W0, Wref) + mldivide(V0, Vref)
     B = mldivide(W0, Wref) - mldivide(V0, Vref)
 
-    Sr_11 = -mldivide(A, B)
-    Sr_12 = 2 * np.linalg.inv(A)
-    Sr_21 = 0.5 * (A - mrdivide(B, A) @ B)
-    Sr_22 = mrdivide(B, A)
+    # Solve A X = [B, I]
+    rhs = np.hstack((B, np.eye(A.shape[0], dtype=A.dtype)))
+    sol = np.linalg.solve(A, rhs)
+
+    n = A.shape[0]
+    AinvB = sol[:, :n]
+    Ainv  = sol[:, n:]
+
+    Sr_11 = -AinvB
+    Sr_12 = 2 * Ainv
+
+    # B/A = B @ A^{-1}
+    BAinv = np.linalg.solve(A.T, B.T).T
+
+    Sr_21 = 0.5 * (A - BAinv @ B)
+    Sr_22 = BAinv
 
     S11, S12, S21, S22 = redheffer(Sr_11, Sr_12, Sr_21, Sr_22,
                                     S11, S12, S21, S22)
@@ -348,7 +414,7 @@ def main():
     # px = -np.sin(phi)
     # py = np.cos(phi)
     # TM (uncomment if needed)
-    px = -cos_theta * np.cos(phi)
+    px = cos_theta * np.cos(phi)
     py = cos_theta * np.sin(phi)
 
     S11 = S11.get()
@@ -365,9 +431,13 @@ def main():
     tx = e_trn[0:orderN, 0]
     ty = e_trn[orderN:, 0]
 
-    rz = -np.linalg.inv(Kz_ref) @ (Kx @ rx + Ky @ ry)
-    tz = -np.linalg.inv(Kz_trn) @ (Kx @ tx + Ky @ ty)
-    
+    # rz = -np.linalg.inv(Kz_ref) @ (Kx @ rx + Ky @ ry)
+    # tz = -np.linalg.inv(Kz_trn) @ (Kx @ tx + Ky @ ty)
+    kz_ref_diag = np.diag(Kz_ref)
+    kz_trn_diag = np.diag(Kz_trn)
+
+    rz = -(Kx @ rx + Ky @ ry) / kz_ref_diag
+    tz = -(Kx @ tx + Ky @ ty) / kz_trn_diag
     
 
     R2 = np.abs(rx)**2 + np.abs(ry)**2 + np.abs(rz)**2
